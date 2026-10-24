@@ -59,7 +59,7 @@ jobs:
 
       - name: Publish 360G_LCDPlatform Enhanced
         run: >
-          dotnet publish aorus_engine/src/360G_LCDPlatform/GP-AORUS\ LIQUID\ COOLER\ 360G.csproj
+          dotnet publish aorus_engine/src/360G_LCDPlatform/GP-AORUS_LIQUID_COOLER_360G.csproj
           -c Release
           -r ${{ matrix.runtime }}
           --no-self-contained

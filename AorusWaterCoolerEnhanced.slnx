@@ -4,7 +4,7 @@
     <Project Path="aorus_engine/src/FlashAIOImage/FlashAIOImage.csproj" />
   </Folder>
   <Folder Name="/aorus_engine/src/360G_LCDPlatform/">
-    <Project Path="aorus_engine/src/360G_LCDPlatform/GP-AORUS LIQUID COOLER 360G.csproj" />
+    <Project Path="aorus_engine/src/360G_LCDPlatform/GP-AORUS_LIQUID_COOLER_360G.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/AorusCoolerConverter/AorusCoolerConverter.csproj" />
