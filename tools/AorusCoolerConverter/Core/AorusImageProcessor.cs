@@ -304,13 +304,20 @@ public static class AorusImageProcessor
         return bitmaps;
     }
 
+    public const string DefaultGitHubRepo = "naustagic/Aorus_Engine-RGB_Fusion";
+
     /// <summary>
     /// Checks GitHub Releases API for new updates.
     /// </summary>
-    public static async Task<GitHubReleaseInfo> CheckForGitHubUpdatesAsync(string ownerRepo, string currentVersion)
+    public static async Task<GitHubReleaseInfo> CheckForGitHubUpdatesAsync(string? ownerRepo, string currentVersion)
     {
         var result = new GitHubReleaseInfo();
-        if (string.IsNullOrWhiteSpace(ownerRepo) || !ownerRepo.Contains('/'))
+        if (string.IsNullOrWhiteSpace(ownerRepo))
+        {
+            ownerRepo = DefaultGitHubRepo;
+        }
+
+        if (!ownerRepo.Contains('/'))
         {
             return result;
         }
