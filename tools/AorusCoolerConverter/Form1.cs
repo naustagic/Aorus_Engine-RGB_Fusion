@@ -17,6 +17,9 @@ public partial class Form1 : Form
     private Label lblFileInfo = null!;
     private ComboBox cmbRotation = null!;
     private Button btnLoad = null!;
+    private Button btnFlashCooler = null!;
+    private ProgressBar prgFlash = null!;
+    private Label lblFlashStatus = null!;
     private Button btnSaveBin = null!;
     private Button btnSaveBmp = null!;
     private Button btnDetectCooler = null!;
@@ -57,8 +60,8 @@ public partial class Form1 : Form
 
     private void SetupCustomUi()
     {
-        this.Text            = $"AORUS Liquid Cooler — LCD Image & Animation Tool v{AorusImageProcessor.AppVersion}";
-        this.Size            = new Size(820, 680);
+        this.Text            = $"AORUS Liquid Cooler — LCD Studio v{AorusImageProcessor.AppVersion}";
+        this.Size            = new Size(820, 710);
         this.StartPosition   = FormStartPosition.CenterScreen;
         this.BackColor       = AorusDark;
         this.ForeColor       = AorusLight;
@@ -149,17 +152,43 @@ public partial class Form1 : Form
         this.Controls.Add(cmbRotation);
         currentY += 52;
 
-        // Save BIN (orange primary action)
-        btnSaveBin = CreateStyledButton("💾 Gerar Arquivo .BIN do Water Cooler", new Point(rightX, currentY), 380, 44, Color.FromArgb(234, 88, 12));
+        // ── Primary Action: Flash directly to Cooler ─────────────────────────────
+        btnFlashCooler = CreateStyledButton("⚡ Gravar no Water Cooler (USB Direto)", new Point(rightX, currentY), 380, 46, Color.FromArgb(234, 88, 12));
+        btnFlashCooler.Font  = new Font("Segoe UI", 11F, FontStyle.Bold);
+        btnFlashCooler.Click += BtnFlashCooler_Click;
+        this.Controls.Add(btnFlashCooler);
+        currentY += 52;
+
+        prgFlash = new ProgressBar
+        {
+            Location = new Point(rightX, currentY),
+            Size     = new Size(380, 14),
+            Visible  = false
+        };
+        this.Controls.Add(prgFlash);
+
+        lblFlashStatus = new Label
+        {
+            Text      = "",
+            Location  = new Point(rightX, currentY + 16),
+            Size      = new Size(380, 20),
+            ForeColor = AorusOrange,
+            Font      = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleCenter,
+            Visible   = false
+        };
+        this.Controls.Add(lblFlashStatus);
+        currentY += 40;
+
+        // Save BIN & Export BMP (compact side-by-side)
+        btnSaveBin = CreateStyledButton("💾 Salvar .BIN", new Point(rightX, currentY), 185, 38, AorusDark2);
         btnSaveBin.Click += BtnSaveBin_Click;
         this.Controls.Add(btnSaveBin);
-        currentY += 54;
 
-        // Save BMP
-        btnSaveBmp = CreateStyledButton("🖼 Exportar como BMP 16-Bit RGB565", new Point(rightX, currentY), 380, 38, AorusDark2);
+        btnSaveBmp = CreateStyledButton("🖼 Exportar .BMP", new Point(rightX + 195, currentY), 185, 38, AorusDark2);
         btnSaveBmp.Click += BtnSaveBmp_Click;
         this.Controls.Add(btnSaveBmp);
-        currentY += 58;
+        currentY += 48;
 
         // Separator
         AddSeparator(rightX, currentY, 380);
@@ -563,6 +592,90 @@ public partial class Form1 : Form
             {
                 MessageBox.Show($"Erro ao salvar BMP: {ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // FLASH DIRECTLY TO COOLER
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    private async void BtnFlashCooler_Click(object? sender, EventArgs e)
+    {
+        if (loadedFrames.Count == 0 || string.IsNullOrEmpty(currentLoadedPath))
+        {
+            MessageBox.Show("Por favor, selecione uma imagem ou GIF animado primeiro.",
+                "Nenhuma Imagem Selecionada", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            BtnLoad_Click(sender, e);
+            if (loadedFrames.Count == 0 || string.IsNullOrEmpty(currentLoadedPath)) return;
+        }
+
+        var dr = MessageBox.Show(
+            $"Deseja gravar a animação/imagem exibida ({loadedFrames.Count} frame(s)) diretamente no LCD do Water Cooler via USB?\n\n" +
+            "A ferramenta preparará o payload na rotação selecionada e gravará na memória Flash SPI.",
+            "Confirmar Gravação no Water Cooler",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (dr != DialogResult.Yes) return;
+
+        btnFlashCooler.Enabled  = false;
+        btnSaveBin.Enabled      = false;
+        btnSaveBmp.Enabled      = false;
+        btnLoad.Enabled         = false;
+        btnDetectCooler.Enabled = false;
+
+        prgFlash.Visible        = true;
+        prgFlash.Value          = 5;
+        lblFlashStatus.Visible  = true;
+        lblFlashStatus.Text     = "Preparando payload da imagem...";
+        lblFlashStatus.ForeColor= AorusOrange;
+
+        try
+        {
+            var opt = new AorusBinOptions
+            {
+                RotationAngle = cmbRotation.SelectedIndex * 90
+            };
+
+            byte[] binData = await Task.Run(() => AorusImageProcessor.ProcessImageToBin(currentLoadedPath, opt));
+
+            var prog = new Progress<(int Percent, string Status)>(report =>
+            {
+                prgFlash.Value = Math.Clamp(report.Percent, 0, 100);
+                lblFlashStatus.Text = report.Status;
+            });
+
+            var result = await Task.Run(() => AorusScsiTransport.FlashPayloadToCoolerAsync(binData, prog));
+
+            if (result.Success)
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(34, 197, 94);
+                lblFlashStatus.Text      = "✓ Gravação concluída com sucesso!";
+                MessageBox.Show(
+                    "🎉 Gravação Concluída com Sucesso!\n\n" +
+                    "A nova imagem/animação foi gravada na memória Flash do Water Cooler e já está ativa no LCD.",
+                    "Sucesso!", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
+                lblFlashStatus.Text      = "Falha na gravação.";
+                MessageBox.Show(result.Message, "Falha na Gravação", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
+            lblFlashStatus.Text      = "Erro inesperado.";
+            MessageBox.Show($"Ocorreu um erro ao processar ou gravar:\n{ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            btnFlashCooler.Enabled  = true;
+            btnSaveBin.Enabled      = true;
+            btnSaveBmp.Enabled      = true;
+            btnLoad.Enabled         = true;
+            btnDetectCooler.Enabled = true;
         }
     }
 

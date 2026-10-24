@@ -198,6 +198,166 @@ public class AorusScsiTransport : IDisposable
         return ok && wrapper.sptd.ScsiStatus == 0;
     }
 
+    /// <summary>
+    /// Tests device status via SCSI CMD 241 (0xF1).
+    /// </summary>
+    public uint TestDevice()
+    {
+        byte[] array = new byte[32];
+        if (SendScsiCommand(CMD_TEST, 192, 0, (uint)array.Length, array))
+        {
+            return BitConverter.ToUInt32(array, 0);
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Returns true if device is currently in IAP programming mode.
+    /// </summary>
+    public bool IsIapMode()
+    {
+        uint num = TestDevice();
+        if (num != 0 && (num & 0x80000000u) == 0x80000000u)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Reboots device to IAP mode (mode=1) or normal operating mode (mode=0).
+    /// </summary>
+    public bool RebootDevice(byte mode)
+    {
+        return SendScsiCommand(CMD_ALTERNATE_MODE, mode, 0, 0, null);
+    }
+
+    /// <summary>
+    /// Flashes a .BIN binary image directly into the LCD SPI Flash memory of the Aorus Cooler.
+    /// Handles IAP mode rebooting, USB re-enumeration, block erase, and block writing.
+    /// </summary>
+    public static async Task<(bool Success, string Message)> FlashPayloadToCoolerAsync(
+        byte[] rawBinData,
+        IProgress<(int Percent, string Status)>? progress = null,
+        System.Threading.CancellationToken ct = default)
+    {
+        if (rawBinData == null || rawBinData.Length == 0)
+        {
+            return (false, "Nenhum dado binário fornecido para gravação.");
+        }
+
+        // 1. Detectar dispositivo
+        progress?.Report((5, "Detectando Water Cooler via USB..."));
+        var dev = DetectDevice();
+        if (!dev.IsFound)
+        {
+            return (false, "Water Cooler ('LCD_PLATFORM') não encontrado. Verifique a conexão USB.");
+        }
+
+        // 2. Conectar e verificar se precisa reiniciar em IAP
+        using (var transport = new AorusScsiTransport())
+        {
+            if (!transport.OpenDevice(dev.DevicePath))
+            {
+                return (false, "Não foi possível abrir a porta de comunicação com o Water Cooler.");
+            }
+
+            if (!transport.IsIapMode())
+            {
+                progress?.Report((10, "Reiniciando Water Cooler em Modo IAP..."));
+                transport.RebootDevice(1);
+                transport.Close();
+
+                // Aguardar reinicialização USB do microcontrolador
+                bool reconnected = false;
+                for (int i = 0; i < 10; i++)
+                {
+                    await Task.Delay(1000, ct);
+                    progress?.Report((10 + i * 2, $"Aguardando reconexão IAP... ({i + 1}s)"));
+                    var checkDev = DetectDevice();
+                    if (checkDev.IsFound)
+                    {
+                        if (transport.OpenDevice(checkDev.DevicePath) && transport.IsIapMode())
+                        {
+                            reconnected = true;
+                            break;
+                        }
+                        transport.Close();
+                    }
+                }
+
+                if (!reconnected)
+                {
+                    return (false, "O Water Cooler reiniciou, mas o modo IAP não respondeu a tempo.");
+                }
+            }
+
+            // 3. Preparar buffer alinhado a blocos de 2048 bytes
+            byte[] paddedData = rawBinData;
+            if (rawBinData.Length % 2048 != 0)
+            {
+                int newLen = (rawBinData.Length / 2048 + 1) * 2048;
+                paddedData = new byte[newLen];
+                Array.Fill<byte>(paddedData, 0xFF);
+                Array.Copy(rawBinData, paddedData, rawBinData.Length);
+            }
+
+            uint length = (uint)paddedData.Length;
+            uint blockSize = BlockSize; // 64 KB
+
+            // 4. Apagar blocos de memória Flash SPI externa
+            uint totalErase = length;
+            if (totalErase % blockSize != 0)
+            {
+                totalErase = (totalErase / blockSize + 1) * blockSize;
+            }
+
+            for (uint offset = 0; offset < totalErase; offset += blockSize)
+            {
+                ct.ThrowIfCancellationRequested();
+                int pct = 25 + (int)((long)offset * 25 / totalErase);
+                progress?.Report((pct, $"Apagando Flash SPI... ({pct}%)"));
+
+                if (!transport.SendScsiCommand(CMD_ERASE, 0, offset, blockSize, null))
+                {
+                    return (false, $"Falha ao apagar bloco de memória Flash na posição 0x{offset:X}.");
+                }
+            }
+            transport.TestDevice();
+
+            // 5. Gravar dados binários na Flash SPI
+            int remaining = paddedData.Length;
+            int srcOffset = 0;
+            byte[] chunkBuf = new byte[blockSize];
+
+            while (remaining > 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                int pct = 50 + (int)((long)srcOffset * 45 / paddedData.Length);
+                progress?.Report((pct, $"Gravando no LCD... ({pct}%)"));
+
+                uint writeLen = (uint)Math.Min(remaining, blockSize);
+                Array.Copy(paddedData, srcOffset, chunkBuf, 0, (int)writeLen);
+
+                if (!transport.SendScsiCommand(CMD_WRITE, 64, (uint)srcOffset, writeLen, chunkBuf))
+                {
+                    return (false, $"Falha ao gravar bloco de imagem na posição 0x{srcOffset:X}.");
+                }
+
+                srcOffset += (int)writeLen;
+                remaining -= (int)writeLen;
+            }
+            transport.TestDevice();
+
+            // 6. Retornar dispositivo ao modo normal
+            progress?.Report((98, "Reiniciando Water Cooler para exibição..."));
+            transport.RebootDevice(0);
+        }
+
+        progress?.Report((100, "✓ Gravação concluída com sucesso!"));
+        return (true, "Animação/Imagem gravada no LCD do Water Cooler com sucesso!");
+    }
+
     public void Dispose()
     {
         if (!_disposed)
