@@ -859,28 +859,148 @@ public class Form1 : Form, IProgress
 			m_labelDevInfo.Text = Lable.USB_connected;
 			getVersion();
 		}
-		ToolTip toolTip = new ToolTip();
-		toolTip.AutoPopDelay = 10000;
-		toolTip.InitialDelay = 1000;
-		toolTip.ReshowDelay = 500;
-		toolTip.IsBalloon = true;
-		toolTip.ShowAlways = true;
-		toolTip.SetToolTip(m_bCreateExe, Lable.Create_exe);
-		toolTip.SetToolTip(m_lVersion, Lable.Version);
-		toolTip.SetToolTip(label_version, "Clique para verificar novas versões no GitHub");
-		toolTip.SetToolTip(m_lVersion, "Clique para verificar novas versões no GitHub");
-		toolTip.SetToolTip(m_ctlDownload, Lable.btn_download_tips);
-		toolTip.SetToolTip(m_ctlAddImage, "");
-		toolTip.SetToolTip(m_ctlDelImage, "");
-		toolTip.SetToolTip(m_ctlMoveUp, "");
-		toolTip.SetToolTip(m_ctlMoveDown, "");
-		toolTip.SetToolTip(m_ctlOption, "");
-		toolTip.SetToolTip(m_ctlDemoTool, "");
+
+		// ── Tema escuro AORUS ────────────────────────────────────────────────────
+		ApplyDarkTheme();
+
+		// ── Tooltips explicativos ────────────────────────────────────────────────
+		ToolTip tt = new ToolTip();
+		tt.AutoPopDelay = 12000;
+		tt.InitialDelay = 600;
+		tt.ReshowDelay = 300;
+		tt.IsBalloon = false;
+		tt.ShowAlways = true;
+
+		tt.SetToolTip(m_ctlAddImage,
+			"Adicionar imagem BMP/JPG/PNG à lista de frames\n" +
+			"O software converte e empacota no formato do LCD 320×320");
+		tt.SetToolTip(m_ctlDelImage,
+			"Remover imagem selecionada da lista\n" +
+			"(clique direito para limpar tudo)");
+		tt.SetToolTip(m_ctlMoveUp,   "Mover imagem selecionada para cima na ordem de exibição");
+		tt.SetToolTip(m_ctlMoveDown, "Mover imagem selecionada para baixo na ordem de exibição");
+		tt.SetToolTip(m_ctlOption,
+			"Configurações avançadas:\n" +
+			"• Redimensionamento de imagem\n" +
+			"• Versão do firmware\n" +
+			"• Modo de download");
+		tt.SetToolTip(m_ctlDemoTool,
+			"Ferramenta de demonstração/teste do LCD");
+		tt.SetToolTip(m_ctlSaveImageBin,
+			"Salvar imagens como arquivo .BIN\n" +
+			"Use o AorusCoolerConverter para converter PNG/GIF para .BIN");
+		tt.SetToolTip(m_ctlDownload,
+			"Gravar imagem no LCD do Water Cooler via USB\n" +
+			"Requer dispositivo conectado em modo IAP (após clicar em 'Conectar')");
+		tt.SetToolTip(bConnect,
+			"⚠ Reiniciar o dispositivo em modo IAP (gravação)\n" +
+			"A imagem do LCD ficará em branco durante o processo.\n" +
+			"Use apenas quando quiser atualizar a imagem ou firmware.");
+		tt.SetToolTip(m_bCreateExe,  Lable.Create_exe);
+		tt.SetToolTip(label_version, "Clique para verificar novas versões no GitHub");
+		tt.SetToolTip(m_lVersion,    "Clique para verificar novas versões no GitHub");
 
 		label_version.Cursor = Cursors.Hand;
 		label_version.Click += Label_version_Click;
 		m_lVersion.Cursor = Cursors.Hand;
 		m_lVersion.Click += Label_version_Click;
+	}
+
+	/// <summary>
+	/// Aplica tema escuro AORUS sobre os controles gerados pelo InitializeComponent.
+	/// Chamado uma vez no Form1_Load.
+	/// </summary>
+	private void ApplyDarkTheme()
+	{
+		var bg      = Color.FromArgb(24, 24, 27);
+		var bgCtrl  = Color.FromArgb(39, 39, 42);
+		var bgGroup = Color.FromArgb(30, 30, 33);
+		var fg      = Color.FromArgb(228, 228, 231);
+		var accent  = Color.FromArgb(250, 146, 60);   // AORUS Orange
+		var fgDim   = Color.FromArgb(120, 120, 130);
+		var fgRed   = Color.FromArgb(239, 68, 68);
+		var fgGreen = Color.FromArgb(34, 197, 94);
+		var border  = Color.FromArgb(63, 63, 70);
+
+		this.BackColor = bg;
+		this.ForeColor = fg;
+		this.Font      = new Font("Segoe UI", 9.5F);
+
+		// Função helper para estilizar botões
+		void StyleBtn(Button b, Color? accentColor = null)
+		{
+			b.BackColor  = accentColor ?? bgCtrl;
+			b.ForeColor  = Color.White;
+			b.FlatStyle  = FlatStyle.Flat;
+			b.FlatAppearance.BorderColor = accentColor.HasValue
+				? Color.FromArgb(Math.Max(0, accentColor.Value.R - 40), Math.Max(0, accentColor.Value.G - 40), Math.Max(0, accentColor.Value.B - 40))
+				: border;
+			b.FlatAppearance.BorderSize  = 1;
+			b.Cursor = Cursors.Hand;
+		}
+
+		// Botões de ação
+		StyleBtn(m_ctlDownload,    accent);
+		StyleBtn(m_ctlSaveImageBin);
+		StyleBtn(m_ctlDemoTool);
+		StyleBtn(m_bCreateExe);
+		StyleBtn(m_ctlAddImage);
+		StyleBtn(m_ctlDelImage,    fgRed);
+		StyleBtn(m_ctlOption);
+		StyleBtn(m_ctlMoveUp);
+		StyleBtn(m_ctlMoveDown);
+
+		// Botão Connect — ação de aviso (amarelo)
+		StyleBtn(bConnect, Color.FromArgb(180, 100, 0));
+		bConnect.Text = "⚡ Conectar (IAP)";
+
+		// Labels de estado
+		m_labelDevInfo.ForeColor = fgGreen;
+		m_labelDevInfo.Font      = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+		m_lVersion.ForeColor     = accent;
+		m_lVersion.Font          = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+		label_version.ForeColor  = fgDim;
+		label_version.Font       = new Font("Segoe UI", 9.5F);
+		LInformation.ForeColor   = fgDim;
+		LInformation.Font        = new Font("Segoe UI", 8.5F);
+
+		// GroupBox de imagens
+		groupBox1.BackColor  = bgGroup;
+		groupBox1.ForeColor  = accent;
+		groupBox1.Font       = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+		groupBox1.Text       = "📷 Lista de Imagens";
+
+		// ListBox de imagens
+		m_ctlImage.BackColor  = Color.FromArgb(18, 18, 22);
+		m_ctlImage.ForeColor  = fg;
+		m_ctlImage.Font       = new Font("Segoe UI", 9F);
+		m_ctlImage.BorderStyle = BorderStyle.FixedSingle;
+
+		// PictureBox
+		m_ctlPictureBox1.BackColor  = Color.FromArgb(12, 12, 14);
+		m_ctlPictureBox1.BorderStyle = BorderStyle.FixedSingle;
+
+		// ProgressBar
+		m_ctlProgressBar1.BackColor  = bgCtrl;
+		m_ctlProgressBar1.ForeColor  = accent;
+
+		// Renomear botões para PT-BR descritivo
+		m_ctlDownload.Text     = "⬇ Gravar no LCD";
+		m_ctlSaveImageBin.Text = "💾 Salvar .BIN";
+		m_ctlDemoTool.Text     = "🖥 Demo LCD";
+		m_bCreateExe.Text      = "📦 Criar AP.exe";
+		m_ctlAddImage.Text     = "+ Add";
+		m_ctlDelImage.Text     = "✕ Del";
+		m_ctlOption.Text       = "⚙ Opções";
+		m_ctlMoveUp.Text       = "▲";
+		m_ctlMoveDown.Text     = "▼";
+
+		// Painel de status desconectado → cor vermelha
+		if (m_labelDevInfo.Text.Contains("disconnect", StringComparison.OrdinalIgnoreCase) ||
+		    m_labelDevInfo.Text.Contains("descon", StringComparison.OrdinalIgnoreCase))
+		{
+			m_labelDevInfo.ForeColor = fgRed;
+		}
 	}
 
 	private async void Label_version_Click(object sender, EventArgs e)
@@ -2090,14 +2210,18 @@ public class Form1 : Form, IProgress
 
 	private void updateUSBStatus()
 	{
+		var fgGreen = Color.FromArgb(34, 197, 94);
+		var fgRed   = Color.FromArgb(239, 68, 68);
 		if (FindDevice() == 0)
 		{
-			m_labelDevInfo.Text = Lable.USB_connected;
+			m_labelDevInfo.Text      = Lable.USB_connected;
+			m_labelDevInfo.ForeColor = fgGreen;
 			getVersion();
 		}
 		else
 		{
-			m_labelDevInfo.Text = Lable.USB_disconnected;
+			m_labelDevInfo.Text      = Lable.USB_disconnected;
+			m_labelDevInfo.ForeColor = fgRed;
 			updateVersionText("N/A");
 		}
 	}
@@ -2120,11 +2244,14 @@ public class Form1 : Form, IProgress
 	private void OnDeviceChange(ref Message msg)
 	{
 		int num = (int)msg.WParam;
-		if (num == 32768 || num == 32772 || num == 7)
-		{
-			thread_usb = new Thread(updateThread);
-			thread_usb.Start();
-		}
+		// DBT_DEVNODES_CHANGED (7) dispara dezenas de vezes por minuto — ignorar
+		// Só reagir a DBT_DEVICEARRIVAL (32768) e DBT_DEVICEREMOVECOMPLETE (32772)
+		if (num != 32768 && num != 32772) return;
+		// Debounce: não iniciar nova thread se já há uma verificando
+		if (thread_usb != null && thread_usb.IsAlive) return;
+		thread_usb = new Thread(updateThread);
+		thread_usb.IsBackground = true;
+		thread_usb.Start();
 	}
 
 	private void RegisterHidNotification()
