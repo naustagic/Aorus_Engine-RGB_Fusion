@@ -9,6 +9,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using MontBlanc.Pic.Compress;
 using MontBlanc.Pic.Convert;
@@ -316,12 +317,10 @@ public class Form1 : Form, IProgress
 			if (!hT32F.isIAPMode())
 			{
 				Debug.WriteLine("设备处于AP模式");
-				bConnect.Enabled = true;
-				m_ctlDownload.Enabled = false;
-				return 254u;
+				hT32F.closeDevice();
+				hT32F = null;
+				return 1u;
 			}
-			m_ctlDownload.Enabled = true;
-			bConnect.Enabled = false;
 			m_sDevName = hT32F.deviceName;
 			hT32F.closeDevice();
 			hT32F = null;
@@ -329,8 +328,6 @@ public class Form1 : Form, IProgress
 		}
 		hT32F.closeDevice();
 		hT32F = null;
-		bConnect.Enabled = false;
-		m_ctlDownload.Enabled = false;
 		Debug.WriteLine("未找到设备");
 		return 254u;
 	}
@@ -854,12 +851,8 @@ public class Form1 : Form, IProgress
 	private void Form1_Load(object sender, EventArgs e)
 	{
 		Debug.WriteLine("Form1 Load start");
-		m_labelDevInfo.Text = Lable.USB_disconnected;
-		if (FindDevice() == 0)
-		{
-			m_labelDevInfo.Text = Lable.USB_connected;
-			getVersion();
-		}
+		this.Text = $"LCD Factory v{AorusCoolerConverter.Core.AorusImageProcessor.AppVersion} — by SaraLapia";
+		updateUSBStatus();
 
 		// ── Tema escuro AORUS ────────────────────────────────────────────────────
 		ApplyDarkTheme();
@@ -1422,16 +1415,39 @@ public class Form1 : Form, IProgress
 		isUpdating = status;
 	}
 
-	private void bConnect_Click(object sender, EventArgs e)
+	private async void bConnect_Click(object sender, EventArgs e)
 	{
-		HT32F hT32F = new HT32F();
-		if (hT32F.findDevice() && !hT32F.isIAPMode())
+		bConnect.Enabled = false;
+		bConnect.Text = "⏳ Conectando...";
+		m_labelDevInfo.Text = "Reiniciando Water Cooler em Modo IAP...";
+		m_labelDevInfo.ForeColor = Color.FromArgb(250, 204, 21);
+
+		await Task.Run(() =>
 		{
-			Debug.WriteLine("复位设备到IAP中");
-			hT32F.rebootDevice(1);
+			HT32F hT32F = new HT32F();
+			if (hT32F.findDevice() && !hT32F.isIAPMode())
+			{
+				Debug.WriteLine("复位设备到IAP中");
+				hT32F.rebootDevice(1);
+			}
+			hT32F.closeDevice();
+			hT32F = null;
+		});
+
+		// Aguardar a reinicialização USB e montagem do dispositivo (até 8s)
+		for (int i = 0; i < 8; i++)
+		{
+			await Task.Delay(1000);
+			m_labelDevInfo.Text = $"Aguardando reconexão IAP... ({i + 1}s)";
+			uint dev = await Task.Run(() => FindDevice());
+			if (dev == 0u)
+			{
+				updateUSBStatus();
+				return;
+			}
 		}
-		hT32F.closeDevice();
-		hT32F = null;
+
+		updateUSBStatus();
 	}
 
 	private void showMessage(string text, string caption)
@@ -2209,25 +2225,51 @@ public class Form1 : Form, IProgress
 	[DllImport("USB_DLL.dll", CallingConvention = CallingConvention.Cdecl)]
 	private static extern uint HTUSB_ReadData(uint dwSize, byte[] pBuf);
 
+	private System.Windows.Forms.Timer? _usbDebounceTimer;
+
 	private void updateUSBStatus()
 	{
-		var fgGreen = Color.FromArgb(34, 197, 94);
-		var fgRed   = Color.FromArgb(239, 68, 68);
-		if (FindDevice() == 0)
+		if (InvokeRequired)
 		{
-			m_labelDevInfo.Text      = Lable.USB_connected;
+			Invoke(new MethodInvoker(updateUSBStatus));
+			return;
+		}
+
+		var fgGreen  = Color.FromArgb(34, 197, 94);
+		var fgOrange = Color.FromArgb(249, 115, 22);
+		var fgRed    = Color.FromArgb(239, 68, 68);
+
+		uint dev = FindDevice();
+		if (dev == 0u)
+		{
+			m_labelDevInfo.Text      = "USB Conectado (Modo IAP)";
 			m_labelDevInfo.ForeColor = fgGreen;
+			bConnect.Text            = "⚡ Conectar (IAP)";
+			bConnect.Enabled         = false;
+			m_ctlDownload.Enabled    = true;
 			getVersion();
+		}
+		else if (dev == 1u)
+		{
+			m_labelDevInfo.Text      = "USB Conectado (Modo Normal) — Clique em 'Conectar (IAP)'";
+			m_labelDevInfo.ForeColor = fgOrange;
+			bConnect.Text            = "⚡ Conectar (IAP)";
+			bConnect.Enabled         = true;
+			m_ctlDownload.Enabled    = false;
+			updateVersionText("Modo Normal");
 		}
 		else
 		{
-			m_labelDevInfo.Text      = Lable.USB_disconnected;
+			m_labelDevInfo.Text      = "USB Desconectado";
 			m_labelDevInfo.ForeColor = fgRed;
+			bConnect.Text            = "⚡ Conectar (IAP)";
+			bConnect.Enabled         = false;
+			m_ctlDownload.Enabled    = false;
 			updateVersionText("N/A");
 		}
 	}
 
-	private void updateThread(object data)
+	private void updateThread(object? data)
 	{
 		Invoke(new MethodInvoker(updateUSBStatus));
 	}
@@ -2245,14 +2287,20 @@ public class Form1 : Form, IProgress
 	private void OnDeviceChange(ref Message msg)
 	{
 		int num = (int)msg.WParam;
-		// DBT_DEVNODES_CHANGED (7) dispara dezenas de vezes por minuto — ignorar
-		// Só reagir a DBT_DEVICEARRIVAL (32768) e DBT_DEVICEREMOVECOMPLETE (32772)
-		if (num != 32768 && num != 32772) return;
-		// Debounce: não iniciar nova thread se já há uma verificando
-		if (thread_usb != null && thread_usb.IsAlive) return;
-		thread_usb = new Thread(updateThread);
-		thread_usb.IsBackground = true;
-		thread_usb.Start();
+		// DBT_DEVNODES_CHANGED (7), DBT_DEVICEARRIVAL (32768), DBT_DEVICEREMOVECOMPLETE (32772)
+		if (num != 7 && num != 32768 && num != 32772) return;
+
+		if (_usbDebounceTimer == null)
+		{
+			_usbDebounceTimer = new System.Windows.Forms.Timer { Interval = 800 };
+			_usbDebounceTimer.Tick += (s, e) =>
+			{
+				_usbDebounceTimer.Stop();
+				updateUSBStatus();
+			};
+		}
+		_usbDebounceTimer.Stop();
+		_usbDebounceTimer.Start();
 	}
 
 	private void RegisterHidNotification()
