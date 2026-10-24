@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <None Include="..\..\aorus_engine\extracted\app\AIO\images\0.bin" Link="0.bin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

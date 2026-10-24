@@ -22,6 +22,7 @@ public partial class Form1 : Form
     private Label lblFlashStatus = null!;
     private Button btnSaveBin = null!;
     private Button btnSaveBmp = null!;
+    private Button btnRestoreDefault = null!;
     private Button btnDetectCooler = null!;
     private Label lblDeviceStatus = null!;
     private TextBox txtGitHubRepo = null!;
@@ -61,7 +62,7 @@ public partial class Form1 : Form
     private void SetupCustomUi()
     {
         this.Text            = $"AORUS Liquid Cooler — LCD Studio v{AorusImageProcessor.AppVersion}";
-        this.Size            = new Size(820, 710);
+        this.Size            = new Size(820, 750);
         this.StartPosition   = FormStartPosition.CenterScreen;
         this.BackColor       = AorusDark;
         this.ForeColor       = AorusLight;
@@ -188,7 +189,14 @@ public partial class Form1 : Form
         btnSaveBmp = CreateStyledButton("🖼 Exportar .BMP", new Point(rightX + 195, currentY), 185, 38, AorusDark2);
         btnSaveBmp.Click += BtnSaveBmp_Click;
         this.Controls.Add(btnSaveBmp);
-        currentY += 48;
+        currentY += 44;
+
+        // Restore factory animation
+        btnRestoreDefault = CreateStyledButton("🔄 Restaurar Padrão de Fábrica (0.bin)", new Point(rightX, currentY), 380, 34, Color.FromArgb(45, 45, 50));
+        btnRestoreDefault.Font = new Font("Segoe UI", 9F);
+        btnRestoreDefault.Click += BtnRestoreDefault_Click;
+        this.Controls.Add(btnRestoreDefault);
+        currentY += 46;
 
         // Separator
         AddSeparator(rightX, currentY, 380);
@@ -498,16 +506,28 @@ public partial class Form1 : Form
             using var img = Image.FromFile(path);
             var frameDim = new FrameDimension(img.FrameDimensionsList[0]);
             int count    = img.GetFrameCount(frameDim);
-
-            for (int i = 0; i < Math.Min(count, 150); i++)
+            int maxFrames = 50;
+            int step = 1;
+            if (count > maxFrames)
             {
+                step = (int)Math.Ceiling((double)count / maxFrames);
+            }
+
+            using var canvas = new Bitmap(img.Width, img.Height, PixelFormat.Format32bppArgb);
+            using var gCanvas = Graphics.FromImage(canvas);
+            gCanvas.Clear(Color.Black);
+
+            for (int i = 0; i < count; i += step)
+            {
+                if (loadedFrames.Count >= maxFrames) break;
                 img.SelectActiveFrame(frameDim, i);
-                loadedFrames.Add(new Bitmap(img));
+                gCanvas.DrawImage(img, 0, 0, img.Width, img.Height);
+                loadedFrames.Add(new Bitmap(canvas));
             }
 
             currentLoadedPath = path;
             string fname = Path.GetFileName(path);
-            lblFileInfo.Text = $"{fname}\n({img.Width}x{img.Height}) — {count} quadro(s)";
+            lblFileInfo.Text = $"{fname}\n({img.Width}x{img.Height}) — {count} quadros ({loadedFrames.Count} convertidos para LCD)";
 
             if (count > 1)
                 animationTimer.Start();
@@ -674,8 +694,99 @@ public partial class Form1 : Form
             btnFlashCooler.Enabled  = true;
             btnSaveBin.Enabled      = true;
             btnSaveBmp.Enabled      = true;
+            btnRestoreDefault.Enabled = true;
             btnLoad.Enabled         = true;
             btnDetectCooler.Enabled = true;
+        }
+    }
+
+    private async void BtnRestoreDefault_Click(object? sender, EventArgs e)
+    {
+        var dr = MessageBox.Show(
+            "Deseja restaurar o Water Cooler para a animação original de fábrica (0.bin)?\n\n" +
+            "Isso apagará o chuvisco/ruído e reinstalará a animação oficial completa da Gigabyte Aorus.",
+            "Restaurar Padrão de Fábrica",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (dr != DialogResult.Yes) return;
+
+        string[] potentialPaths = new[]
+        {
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "0.bin"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "aorus_engine", "extracted", "app", "AIO", "images", "0.bin"),
+            @"d:\eng-rev-watercooler\aorus_engine\extracted\app\AIO\images\0.bin"
+        };
+
+        string? binPath = potentialPaths.FirstOrDefault(File.Exists);
+        if (binPath == null)
+        {
+            using var ofd = new OpenFileDialog
+            {
+                Title = "Localize o arquivo 0.bin original da Gigabyte",
+                Filter = "Arquivo BIN (*.bin)|*.bin|Todos os arquivos (*.*)|*.*"
+            };
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                binPath = ofd.FileName;
+            }
+            else return;
+        }
+
+        btnFlashCooler.Enabled    = false;
+        btnSaveBin.Enabled        = false;
+        btnSaveBmp.Enabled        = false;
+        btnRestoreDefault.Enabled = false;
+        btnLoad.Enabled           = false;
+        btnDetectCooler.Enabled   = false;
+
+        prgFlash.Visible          = true;
+        prgFlash.Value            = 5;
+        lblFlashStatus.Visible    = true;
+        lblFlashStatus.Text       = "Carregando 0.bin de fábrica...";
+        lblFlashStatus.ForeColor  = AorusOrange;
+
+        try
+        {
+            byte[] binData = await File.ReadAllBytesAsync(binPath);
+            var prog = new Progress<(int Percent, string Status)>(report =>
+            {
+                prgFlash.Value = Math.Clamp(report.Percent, 0, 100);
+                lblFlashStatus.Text = report.Status;
+            });
+
+            var result = await Task.Run(() => AorusScsiTransport.FlashPayloadToCoolerAsync(binData, prog));
+
+            if (result.Success)
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(34, 197, 94);
+                lblFlashStatus.Text      = "✓ Padrão de fábrica restaurado!";
+                MessageBox.Show(
+                    "🎉 Padrão de Fábrica Restaurado com Sucesso!\n\n" +
+                    "A animação oficial Aorus foi regravada na memória Flash e o display voltou ao normal.",
+                    "Sucesso!", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
+                lblFlashStatus.Text      = "Falha ao restaurar.";
+                MessageBox.Show(result.Message, "Falha na Gravação", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
+            lblFlashStatus.Text      = "Erro inesperado.";
+            MessageBox.Show($"Erro ao restaurar: {ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            btnFlashCooler.Enabled    = true;
+            btnSaveBin.Enabled        = true;
+            btnSaveBmp.Enabled        = true;
+            btnRestoreDefault.Enabled = true;
+            btnLoad.Enabled           = true;
+            btnDetectCooler.Enabled   = true;
         }
     }
 

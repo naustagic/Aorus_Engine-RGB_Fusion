@@ -19,7 +19,7 @@ public class AorusBinOptions
     public int RotationAngle { get; set; } = 0; // 0, 90, 180, 270
     public bool ByteSwapEndianness { get; set; } = false; // true if MSB first
     public Color BackgroundColor { get; set; } = Color.Black;
-    public int MaxGifFrames { get; set; } = 150;
+    public int MaxGifFrames { get; set; } = 50; // Limite seguro para a partição de 10 MB da SPI Flash
 }
 
 public class AorusFrameInfo
@@ -52,6 +52,7 @@ public static class AorusImageProcessor
     public const int DefaultDisplayWidth = 320;
     public const int DefaultDisplayHeight = 320;
     public const int FrameSizeBytes = DefaultDisplayWidth * DefaultDisplayHeight * 2; // 204,800 bytes
+    public const int MaxFlashSizeBytes = 10485760; // 10 MB limite da partição SPI Flash da AORUS
 
     /// <summary>
     /// Converts any image file (PNG, JPG, BMP, GIF animado) to an AORUS cooler .bin payload.
@@ -71,7 +72,8 @@ public static class AorusImageProcessor
     }
 
     /// <summary>
-    /// Converts a bitmap into an array of frames, handling static images and animated GIFs.
+    /// Converts a bitmap into an array of frames, handling static images and animated GIFs with proper disposal/compositing.
+    /// Clamps to 50 frames max to fit 100% within the 10 MB SPI Flash limit without memory wrapping or noise.
     /// </summary>
     public static List<AorusFrameInfo> ExtractAndConvertFrames(Image image, AorusBinOptions options)
     {
@@ -79,12 +81,26 @@ public static class AorusImageProcessor
         var frameDim = new FrameDimension(image.FrameDimensionsList[0]);
         int frameCount = image.GetFrameCount(frameDim);
 
-        int totalToExtract = Math.Min(frameCount, options.MaxGifFrames);
-        for (int i = 0; i < totalToExtract; i++)
+        int maxFrames = Math.Min(options.MaxGifFrames, 50);
+        int step = 1;
+        if (frameCount > maxFrames)
         {
+            step = (int)Math.Ceiling((double)frameCount / maxFrames);
+        }
+
+        // Canvas cumulativo para compor frames de GIF com dirty rectangles / transparência
+        using var canvas = new Bitmap(image.Width, image.Height, PixelFormat.Format32bppArgb);
+        using var gCanvas = Graphics.FromImage(canvas);
+        gCanvas.Clear(options.BackgroundColor);
+
+        for (int i = 0; i < frameCount; i += step)
+        {
+            if (frames.Count >= maxFrames) break;
+
             image.SelectActiveFrame(frameDim, i);
-            using var frameBmp = new Bitmap(image);
-            using var resizedBmp = PrepareFrame(frameBmp, options);
+            gCanvas.DrawImage(image, 0, 0, image.Width, image.Height);
+
+            using var resizedBmp = PrepareFrame(canvas, options);
             var rgb565 = ConvertToRgb565Bytes(resizedBmp, options.ByteSwapEndianness);
 
             frames.Add(new AorusFrameInfo
@@ -305,7 +321,7 @@ public static class AorusImageProcessor
     }
 
     public const string DefaultGitHubRepo = "naustagic/Aorus_Engine-RGB_Fusion";
-    public const string AppVersion = "2.3.5";
+    public const string AppVersion = "2.3.6";
 
     /// <summary>
     /// Checks GitHub Releases API for new updates.
