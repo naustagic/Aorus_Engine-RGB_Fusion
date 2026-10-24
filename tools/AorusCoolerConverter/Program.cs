@@ -94,7 +94,7 @@ static class Program
     static void PrintUsage()
     {
         Console.WriteLine("==================================================================");
-        Console.WriteLine("AORUS Liquid Cooler LCD Image & Animation Tool CLI v3.0");
+        Console.WriteLine($"AORUS Liquid Cooler LCD Image & Animation Tool CLI v{AorusImageProcessor.AppVersion}");
         Console.WriteLine("==================================================================");
         Console.WriteLine("Uso:");
         Console.WriteLine("  AorusCoolerConverter.exe                       (Abre a interface gráfica)");

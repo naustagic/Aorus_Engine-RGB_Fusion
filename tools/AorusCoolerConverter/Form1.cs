@@ -57,7 +57,7 @@ public partial class Form1 : Form
 
     private void SetupCustomUi()
     {
-        this.Text            = "AORUS Liquid Cooler — LCD Image & Animation Tool v3.0";
+        this.Text            = $"AORUS Liquid Cooler — LCD Image & Animation Tool v{AorusImageProcessor.AppVersion}";
         this.Size            = new Size(820, 680);
         this.StartPosition   = FormStartPosition.CenterScreen;
         this.BackColor       = AorusDark;
@@ -227,7 +227,7 @@ public partial class Form1 : Form
 
         lblUpdateStatus = new Label
         {
-            Text      = "Versão atual: v3.0.0 (Pronto)",
+            Text      = $"Versão atual: v{AorusImageProcessor.AppVersion} (Pronto)",
             Location  = new Point(rightX, currentY),
             Size      = new Size(380, 22),
             ForeColor = Color.FromArgb(34, 197, 94),
@@ -652,7 +652,10 @@ public partial class Form1 : Form
         else
         {
             lblUpdateStatus.ForeColor = Color.FromArgb(34, 197, 94);
-            lblUpdateStatus.Text      = "Você já está na versão mais recente.";
+            lblUpdateStatus.Text      = $"✓ Você já está na versão mais recente (v{AorusImageProcessor.AppVersion}).";
+            MessageBox.Show(
+                $"Você já está utilizando a versão mais recente (v{AorusImageProcessor.AppVersion})!",
+                "Sem Atualizações", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         btnCheckUpdate.Enabled = true;

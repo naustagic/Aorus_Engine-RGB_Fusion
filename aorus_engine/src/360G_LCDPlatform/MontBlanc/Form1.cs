@@ -164,6 +164,7 @@ public class Form1 : Form, IProgress
 		Debug.WriteLine("Form1 Init start");
 		m_wVID = 1241;
 		m_wPID = 12320;
+		this.Text = $"LCD Factory v{AorusCoolerConverter.Core.AorusImageProcessor.AppVersion} — by SaraLapia";
 		Debug.WriteLine("Form1 constructor end");
 		AddCreditsPanel();
 	}

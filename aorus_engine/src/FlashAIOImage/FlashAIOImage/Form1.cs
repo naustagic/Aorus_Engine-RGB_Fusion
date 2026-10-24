@@ -375,7 +375,7 @@ public class Form1 : Form, IProgress
 		base.Controls.Add(this.m_ctlProgressBar1);
 		base.Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
 		base.Name = "Form1";
-		this.Text = "AIO Flasher — by SaraLapia";
+		this.Text = $"AIO Flasher v{AorusCoolerConverter.Core.AorusImageProcessor.AppVersion} — by SaraLapia";
 		base.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);
 		base.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.Form1_FormClosed);
 		base.ResumeLayout(false);
