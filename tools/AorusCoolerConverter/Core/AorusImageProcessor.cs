@@ -305,11 +305,12 @@ public static class AorusImageProcessor
     }
 
     public const string DefaultGitHubRepo = "naustagic/Aorus_Engine-RGB_Fusion";
+    public const string AppVersion = "2.3.2";
 
     /// <summary>
     /// Checks GitHub Releases API for new updates.
     /// </summary>
-    public static async Task<GitHubReleaseInfo> CheckForGitHubUpdatesAsync(string? ownerRepo, string currentVersion)
+    public static async Task<GitHubReleaseInfo> CheckForGitHubUpdatesAsync(string? ownerRepo, string? currentVersion = null)
     {
         var result = new GitHubReleaseInfo();
         if (string.IsNullOrWhiteSpace(ownerRepo))
@@ -339,8 +340,16 @@ public static class AorusImageProcessor
             {
                 result = release;
                 string latest = release.TagName.TrimStart('v', 'V');
-                string current = currentVersion.TrimStart('v', 'V');
-                result.HasUpdate = !string.Equals(latest, current, StringComparison.OrdinalIgnoreCase);
+                string current = (currentVersion ?? AppVersion).TrimStart('v', 'V');
+
+                if (Version.TryParse(latest, out var vLatest) && Version.TryParse(current, out var vCurrent))
+                {
+                    result.HasUpdate = vLatest > vCurrent;
+                }
+                else
+                {
+                    result.HasUpdate = !string.Equals(latest, current, StringComparison.OrdinalIgnoreCase);
+                }
             }
         }
         catch

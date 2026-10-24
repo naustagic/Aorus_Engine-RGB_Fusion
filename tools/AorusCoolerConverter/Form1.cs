@@ -637,7 +637,7 @@ public partial class Form1 : Form
         lblUpdateStatus.ForeColor = Color.FromArgb(250, 204, 21);
 
         string repo = txtGitHubRepo.Text.Trim();
-        var info    = await AorusImageProcessor.CheckForGitHubUpdatesAsync(repo, "3.0.0");
+        var info    = await AorusImageProcessor.CheckForGitHubUpdatesAsync(repo);
 
         if (info.HasUpdate)
         {

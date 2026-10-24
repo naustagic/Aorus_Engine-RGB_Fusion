@@ -1014,7 +1014,7 @@ public class Form1 : Form, IProgress
 
 		try
 		{
-			var release = await AorusCoolerConverter.Core.AorusImageProcessor.CheckForGitHubUpdatesAsync(repo, "v2.3.1");
+			var release = await AorusCoolerConverter.Core.AorusImageProcessor.CheckForGitHubUpdatesAsync(repo);
 			if (release.HasUpdate)
 			{
 				var dr = MessageBox.Show(
