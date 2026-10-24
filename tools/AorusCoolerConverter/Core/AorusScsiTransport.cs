@@ -213,15 +213,16 @@ public class AorusScsiTransport : IDisposable
 
     /// <summary>
     /// Returns true if device is currently in IAP programming mode.
+    /// Bit 31 (0x80000000) of testDevice status indicates IAP mode.
     /// </summary>
     public bool IsIapMode()
     {
         uint num = TestDevice();
         if (num != 0 && (num & 0x80000000u) == 0x80000000u)
         {
-            return false;
+            return true;
         }
-        return true;
+        return false;
     }
 
     /// <summary>
@@ -229,7 +230,8 @@ public class AorusScsiTransport : IDisposable
     /// </summary>
     public bool RebootDevice(byte mode)
     {
-        return SendScsiCommand(CMD_ALTERNATE_MODE, mode, 0, 0, null);
+        uint num = TestDevice();
+        return SendScsiCommand(CMD_ALTERNATE_MODE, 0, mode, mode, null);
     }
 
     /// <summary>
@@ -349,13 +351,35 @@ public class AorusScsiTransport : IDisposable
             }
             transport.TestDevice();
 
-            // 6. Retornar dispositivo ao modo normal
-            progress?.Report((98, "Reiniciando Water Cooler para exibição..."));
+            // 6. Retornar dispositivo ao modo normal (AP) e liberar conexão USB
+            progress?.Report((96, "Reiniciando Water Cooler para modo normal (AP)..."));
             transport.RebootDevice(0);
+            transport.Close();
+
+            // Aguardar a reinicialização USB do microcontrolador e liberação completa da porta
+            await Task.Delay(1500, ct);
+            for (int i = 0; i < 5; i++)
+            {
+                progress?.Report((97 + i, $"Confirmando inicialização do display... ({i + 1}s)"));
+                var checkDev = DetectDevice();
+                if (checkDev.IsFound)
+                {
+                    if (transport.OpenDevice(checkDev.DevicePath))
+                    {
+                        bool isIap = transport.IsIapMode();
+                        transport.Close();
+                        if (!isIap)
+                        {
+                            break;
+                        }
+                    }
+                }
+                await Task.Delay(1000, ct);
+            }
         }
 
-        progress?.Report((100, "✓ Gravação concluída com sucesso!"));
-        return (true, "Animação/Imagem gravada no LCD do Water Cooler com sucesso!");
+        progress?.Report((100, "✓ Gravação concluída! Water Cooler pronto e liberado."));
+        return (true, "Gravação concluída com sucesso! O dispositivo foi reiniciado no modo normal e a porta USB foi liberada.");
     }
 
     public void Dispose()
