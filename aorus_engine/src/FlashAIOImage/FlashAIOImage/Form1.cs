@@ -346,14 +346,36 @@ public class Form1 : Form, IProgress
 		this.m_labelDevInfo.TabIndex = 30;
 		this.m_labelDevInfo.Text = "N/A";
 		this.m_labelDevInfo.TextAlign = System.Drawing.ContentAlignment.TopCenter;
+		// Credits
+		var lblCredits = new System.Windows.Forms.Label
+		{
+			Text = "by SaraLapia  •  github.com/naustagic/Aorus_Engine-RGB_Fusion",
+			Font = new System.Drawing.Font("Segoe UI", 7.5f, System.Drawing.FontStyle.Regular),
+			ForeColor = System.Drawing.Color.FromArgb(100, 100, 110),
+			BackColor = System.Drawing.Color.FromArgb(18, 18, 20),
+			Location = new System.Drawing.Point(0, 65),
+			Size = new System.Drawing.Size(449, 20),
+			TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+			Cursor = System.Windows.Forms.Cursors.Hand,
+			TabIndex = 31
+		};
+		lblCredits.Click += (_, _) =>
+		{
+			System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+			{
+				FileName = "https://github.com/naustagic/Aorus_Engine-RGB_Fusion",
+				UseShellExecute = true
+			});
+		};
 		base.AutoScaleDimensions = new System.Drawing.SizeF(6f, 12f);
 		base.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-		base.ClientSize = new System.Drawing.Size(449, 66);
+		base.ClientSize = new System.Drawing.Size(449, 86);
+		base.Controls.Add(lblCredits);
 		base.Controls.Add(this.m_labelDevInfo);
 		base.Controls.Add(this.m_ctlProgressBar1);
 		base.Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
 		base.Name = "Form1";
-		this.Text = "AIO Flasher";
+		this.Text = "AIO Flasher — by SaraLapia";
 		base.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);
 		base.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.Form1_FormClosed);
 		base.ResumeLayout(false);

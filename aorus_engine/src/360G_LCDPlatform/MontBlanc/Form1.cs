@@ -165,6 +165,37 @@ public class Form1 : Form, IProgress
 		m_wVID = 1241;
 		m_wPID = 12320;
 		Debug.WriteLine("Form1 constructor end");
+		AddCreditsPanel();
+	}
+
+	/// <summary>Adiciona faixa de créditos no rodapé da janela.</summary>
+	private void AddCreditsPanel()
+	{
+		var pnl = new Panel
+		{
+			Dock = DockStyle.Bottom,
+			Height = 26,
+			BackColor = Color.FromArgb(18, 18, 20)
+		};
+		var lbl = new Label
+		{
+			Text = "by SaraLapia  •  github.com/naustagic/Aorus_Engine-RGB_Fusion",
+			Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
+			ForeColor = Color.FromArgb(120, 120, 130),
+			Dock = DockStyle.Fill,
+			TextAlign = ContentAlignment.MiddleCenter,
+			Cursor = Cursors.Hand
+		};
+		lbl.Click += (_, _) =>
+		{
+			System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+			{
+				FileName = "https://github.com/naustagic/Aorus_Engine-RGB_Fusion",
+				UseShellExecute = true
+			});
+		};
+		pnl.Controls.Add(lbl);
+		this.Controls.Add(pnl);
 	}
 
 	public void Init()
