@@ -137,8 +137,8 @@ public partial class Form1 : Form
         // Custom-drawn rotation ComboBox (orange theme)
         cmbRotation = new ComboBox
         {
-            Location      = new Point(rightX + 150, currentY),
-            Width         = 230,
+            Location      = new Point(rightX + 110, currentY),
+            Width         = 270,
             DropDownStyle = ComboBoxStyle.DropDownList,
             DrawMode      = DrawMode.OwnerDrawFixed,
             ItemHeight    = 26,
@@ -146,7 +146,12 @@ public partial class Form1 : Form
             ForeColor     = AorusLight,
             FlatStyle     = FlatStyle.Flat
         };
-        cmbRotation.Items.AddRange(new object[] { "0° (Padrão)", "90°", "180° (Invertido)", "270°" });
+        cmbRotation.Items.AddRange(new object[] {
+            "0° — Tubos no Topo (12h)",
+            "90° — Tubos à Direita (3h)",
+            "180° — Tubos Embaixo (6h)",
+            "270° — Tubos à Esquerda (9h)"
+        });
         cmbRotation.SelectedIndex = 0;
         cmbRotation.DrawItem     += CmbRotation_DrawItem;
         cmbRotation.SelectedIndexChanged += (s, e) => picPreview.Invalidate();
