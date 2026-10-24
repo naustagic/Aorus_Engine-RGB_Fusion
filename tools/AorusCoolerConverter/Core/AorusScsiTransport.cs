@@ -121,6 +121,8 @@ public class AorusScsiTransport : IDisposable
         return info;
     }
 
+    public int LastWin32Error { get; private set; }
+
     public bool OpenDevice(string devicePath)
     {
         Close();
@@ -133,7 +135,14 @@ public class AorusScsiTransport : IDisposable
             FileAttributes.Normal,
             IntPtr.Zero);
 
-        return _deviceHandle != null && !_deviceHandle.IsInvalid;
+        if (_deviceHandle == null || _deviceHandle.IsInvalid)
+        {
+            LastWin32Error = Marshal.GetLastWin32Error();
+            return false;
+        }
+
+        LastWin32Error = 0;
+        return true;
     }
 
     public void Close()
@@ -261,7 +270,11 @@ public class AorusScsiTransport : IDisposable
         {
             if (!transport.OpenDevice(dev.DevicePath))
             {
-                return (false, "Não foi possível abrir a porta de comunicação com o Water Cooler.");
+                if (transport.LastWin32Error == 5)
+                {
+                    return (false, "Acesso Negado (Erro 5): O aplicativo precisa ser Executado como Administrador para acessar a porta USB/SCSI do Water Cooler.");
+                }
+                return (false, $"Não foi possível abrir a porta de comunicação com o Water Cooler (Erro Win32: {transport.LastWin32Error}).");
             }
 
             if (!transport.IsIapMode())
