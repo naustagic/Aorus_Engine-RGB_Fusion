@@ -42,31 +42,61 @@ public class Form1 : Form, IProgress
 	{
 		m_args = args;
 		InitializeComponent();
-		if (args.Length > 0)
+		base.Shown += Form1_Shown;
+	}
+
+	private void Form1_Shown(object? sender, EventArgs e)
+	{
+		string? targetFile = null;
+
+		if (m_args != null && m_args.Length > 0 && !string.IsNullOrWhiteSpace(m_args[0]))
 		{
-			if (LoadImage(args[0]))
+			targetFile = m_args[0];
+		}
+		else
+		{
+			using var ofd = new OpenFileDialog
 			{
-				Flash();
+				Title = "Selecione o arquivo .BIN ou Imagem para gravar no LCD",
+				Filter = "Arquivos Suportados (*.bin;*.gif;*.png;*.jpg;*.bmp;*.webp)|*.bin;*.gif;*.png;*.jpg;*.jpeg;*.bmp;*.webp|Arquivo Binário (*.bin)|*.bin|Imagens (*.gif;*.png;*.jpg;*.bmp)|*.gif;*.png;*.jpg;*.jpeg;*.bmp|Todos os arquivos (*.*)|*.*",
+				CheckFileExists = true
+			};
+
+			if (ofd.ShowDialog(this) == DialogResult.OK)
+			{
+				targetFile = ofd.FileName;
 			}
 			else
 			{
 				Close();
+				return;
 			}
 		}
-		else
+
+		if (string.IsNullOrEmpty(targetFile) || !LoadImage(targetFile))
 		{
+			MessageBox.Show("Não foi possível carregar o arquivo selecionado ou formato inválido.", "Erro de Arquivo", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			Close();
+			return;
 		}
+
+		Flash();
 	}
 
 	public void Flash()
 	{
+		m_labelDevInfo.Text = "Conectando ao Water Cooler...";
 		if (Connect())
 		{
 			m_bFlashing = true;
-			Thread.Sleep(2000);
+			Thread.Sleep(1500);
 			InitThread();
 			m_wt.Start(this);
+		}
+		else
+		{
+			MessageBox.Show("Dispositivo do Water Cooler ('LCD_PLATFORM') não encontrado!\nVerifique se o cabo USB do cooler está conectado.", "Dispositivo Não Encontrado", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			Close();
 		}
 	}
 
@@ -207,10 +237,6 @@ public class Form1 : Form, IProgress
 		lCDPlatform.closeDevice();
 		lCDPlatform = null;
 		DisConnect();
-		if (!flag)
-		{
-			Process.Start(Path.GetFullPath("FlashAIOImage.exe"), m_args[0] ?? "");
-		}
 		object[] args = new object[2]
 		{
 			this,
@@ -298,8 +324,15 @@ public class Form1 : Form, IProgress
 
 	private void Form1_FormClosed(object sender, FormClosedEventArgs e)
 	{
-		m_wt.Abort();
-		Process.Start(Path.GetFullPath("../Aorus.exe"), "/aio");
+		try
+		{
+			string aorusPath = Path.GetFullPath("../Aorus.exe");
+			if (File.Exists(aorusPath))
+			{
+				Process.Start(new ProcessStartInfo(aorusPath, "/aio") { UseShellExecute = true });
+			}
+		}
+		catch { }
 	}
 
 	private void Form1_FormClosing(object sender, FormClosingEventArgs e)
