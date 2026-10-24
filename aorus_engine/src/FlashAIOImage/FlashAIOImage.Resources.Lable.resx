@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+<resheader name="resmimetype"><value>text/microsoft-resx</value></resheader><resheader name="version"><value>1.3</value></resheader><resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader><resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader><data name="APSpeed" xml:space="preserve"><value>AP speed</value></data>
+  <data name="Erase_Data_Fault" xml:space="preserve"><value>Erase Data Fault</value></data>
+  <data name="setting_set_version" xml:space="preserve"><value /></data>
+  <data name="Verify_Image_Failed" xml:space="preserve"><value>Image verify failed</value></data>
+  <data name="ImageSpeed" xml:space="preserve"><value>Image speed</value></data>
+  <data name="APSize" xml:space="preserve"><value>AP size</value></data>
+  <data name="TotalTime" xml:space="preserve"><value>Total time</value></data>
+  <data name="ImageSize" xml:space="preserve"><value>Image size</value></data>
+  <data name="setting_download_image" xml:space="preserve"><value /></data>
+  <data name="Verify_Image" xml:space="preserve"><value>Image verifying</value></data>
+  <data name="Erase_Image" xml:space="preserve"><value>Erase Image...</value></data>
+  <data name="Convet_Fault" xml:space="preserve"><value>Convet Fault</value></data>
+  <data name="USB_connected" xml:space="preserve"><value>USB connected</value></data>
+  <data name="setting_entry_ap" xml:space="preserve"><value /></data>
+  <data name="setting_ok" xml:space="preserve"><value /></data>
+  <data name="Verify_AP_Failed" xml:space="preserve"><value>AP verify failed</value></data>
+  <data name="Erase_Version" xml:space="preserve"><value>Erase Version...</value></data>
+  <data name="btn_download_tips" xml:space="preserve"><value /></data>
+  <data name="Start_Download" xml:space="preserve"><value>Start Download...</value></data>
+  <data name="USB_disconnected" xml:space="preserve"><value>USB disconnected</value></data>
+  <data name="Create_exe" xml:space="preserve"><value /></data>
+  <data name="setting_download_ap" xml:space="preserve"><value /></data>
+  <data name="Verify_Done" xml:space="preserve"><value>Verify done</value></data>
+  <data name="Version" xml:space="preserve"><value>the current device version</value></data>
+  <data name="Programing_Version" xml:space="preserve"><value>Programing Version......</value></data>
+  <data name="Not_support_file_type" xml:space="preserve"><value>Not support file type</value></data>
+  <data name="Erase_and_program_ap" xml:space="preserve"><value>Erase and program AP...</value></data>
+  <data name="FileOpen" xml:space="preserve"><value>Please check if this file is opened in another program.</value></data>
+  <data name="setting_images_of_bin" xml:space="preserve"><value /></data>
+  <data name="setting_images_in_the_list" xml:space="preserve"><value /></data>
+  <data name="Download_Fault" xml:space="preserve"><value>Download Fault ！Wait for retry...</value></data>
+  <data name="Download_Image" xml:space="preserve"><value>Download Image...</value></data>
+  <data name="TestLable" xml:space="preserve"><value>hello</value></data>
+  <data name="Download_Image_OK" xml:space="preserve"><value>Download Image OK!</value></data>
+  <data name="Verify_AP" xml:space="preserve"><value>AP verifying</value></data>
+  <data name="Erase_Done" xml:space="preserve"><value>Erase Done...</value></data>
+  <data name="setting_cancel" xml:space="preserve"><value /></data>
+  <data name="Done" xml:space="preserve"><value>Done !</value></data>
+  </root>

@@ -1,0 +1,20 @@
+# Visual Studio & .NET build outputs
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+*.lock.json
+project.lock.json
+
+# Temporary / Scratch artifacts
+scratch/
+*.tmp
+*.log
+
+# Large binary installer files exceeding GitHub 100MB limit
+originais/*.exe
+aorus_engine/extracted/app/UpdPack.exe
+rgb_fusion/extracted/offline_package/setup.exe
+rgb_fusion/extracted/offline_package/raw/

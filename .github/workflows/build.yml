@@ -1,0 +1,103 @@
+name: Build & Release Aorus Water Cooler Tools
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Test (${{ matrix.runtime }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [ win-x86, win-x64 ]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore AorusWaterCoolerEnhanced.slnx
+
+      - name: Run Unit Tests
+        run: dotnet test tools/tests/tests.csproj --configuration Release --verbosity normal
+
+      - name: Publish AorusCoolerConverter (Framework-Dependent)
+        run: >
+          dotnet publish tools/AorusCoolerConverter/AorusCoolerConverter.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --no-self-contained
+          -o publish/AorusCoolerConverter-${{ matrix.runtime }}-portable
+
+      - name: Publish AorusCoolerConverter (Self-Contained SingleFile)
+        run: >
+          dotnet publish tools/AorusCoolerConverter/AorusCoolerConverter.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/AorusCoolerConverter-${{ matrix.runtime }}-standalone
+
+      - name: Publish FlashAIOImage Enhanced
+        run: >
+          dotnet publish aorus_engine/src/FlashAIOImage/FlashAIOImage.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --no-self-contained
+          -o publish/FlashAIOImage-${{ matrix.runtime }}
+
+      - name: Publish 360G_LCDPlatform Enhanced
+        run: >
+          dotnet publish aorus_engine/src/360G_LCDPlatform/GP-AORUS\ LIQUID\ COOLER\ 360G.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --no-self-contained
+          -o publish/360G_LCDPlatform-${{ matrix.runtime }}
+
+      - name: Compress Release Artifacts
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish/AorusCoolerConverter-${{ matrix.runtime }}-standalone/* -DestinationPath publish/AorusCoolerConverter-${{ matrix.runtime }}-standalone.zip
+          Compress-Archive -Path publish/AorusCoolerConverter-${{ matrix.runtime }}-portable/* -DestinationPath publish/AorusCoolerConverter-${{ matrix.runtime }}-portable.zip
+          Compress-Archive -Path publish/FlashAIOImage-${{ matrix.runtime }}/* -DestinationPath publish/FlashAIOImage-${{ matrix.runtime }}.zip
+          Compress-Archive -Path publish/360G_LCDPlatform-${{ matrix.runtime }}/* -DestinationPath publish/360G_LCDPlatform-${{ matrix.runtime }}.zip
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AorusTools-${{ matrix.runtime }}
+          path: publish/*.zip
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
