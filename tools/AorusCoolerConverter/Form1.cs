@@ -18,18 +18,26 @@ public partial class Form1 : Form
     private ComboBox cmbTubes = null!;
     private ComboBox cmbRotation = null!;
     private Button btnLoad = null!;
+    private CheckBox chkDryRun = null!;
     private Button btnFlashCooler = null!;
     private ProgressBar prgFlash = null!;
     private Label lblFlashStatus = null!;
+    private Button btnDumpFlash = null!;
     private Button btnSaveBin = null!;
     private Button btnSaveBmp = null!;
     private Button btnRestoreDefault = null!;
+    private Button btnCloseGigabyte = null!;
     private Button btnDetectCooler = null!;
     private Label lblDeviceStatus = null!;
     private TextBox txtGitHubRepo = null!;
     private Button btnCheckUpdate = null!;
     private Label lblUpdateStatus = null!;
     private System.Windows.Forms.Timer animationTimer = null!;
+
+    // ── Debug Panel Controls ─────────────────────────────────────────────────────
+    private TextBox txtDebugLog = null!;
+    private Button btnOpenLogFile = null!;
+    private Button btnClearLog = null!;
 
     // ── State ────────────────────────────────────────────────────────────────────
     private List<Bitmap> loadedFrames = new();
@@ -66,7 +74,17 @@ public partial class Form1 : Form
     {
         InitializeComponent();
         SetupCustomUi();
-        this.Load += (_, _) => animationTimer.Start();
+        this.Load += (_, _) =>
+        {
+            animationTimer.Start();
+            AorusLogger.OnLogMessage += AppendDebugLog;
+            AorusLogger.Log("APP", $"AORUS Liquid Cooler LCD Studio v{AorusImageProcessor.AppVersion} iniciado.");
+            BtnDetectCooler_Click(this, EventArgs.Empty);
+        };
+        this.FormClosed += (_, _) =>
+        {
+            AorusLogger.OnLogMessage -= AppendDebugLog;
+        };
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -75,12 +93,12 @@ public partial class Form1 : Form
 
     private void SetupCustomUi()
     {
-        this.Text            = $"AORUS Liquid Cooler — LCD Studio v{AorusImageProcessor.AppVersion}";
-        this.Size            = new Size(820, 750);
+        this.Text            = $"AORUS Liquid Cooler — LCD Studio v{AorusImageProcessor.AppVersion} [Diagnóstico & Dry Run]";
+        this.Size            = new Size(1220, 780);
         this.StartPosition   = FormStartPosition.CenterScreen;
         this.BackColor       = AorusDark;
         this.ForeColor       = AorusLight;
-        this.Font            = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+        this.Font            = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point);
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.MaximizeBox     = false;
 
@@ -90,25 +108,25 @@ public partial class Form1 : Form
             Text      = "AORUS Liquid Cooler LCD Studio",
             Font      = new Font("Segoe UI", 16F, FontStyle.Bold),
             ForeColor = AorusOrange,
-            Location  = new Point(24, 20),
+            Location  = new Point(24, 18),
             AutoSize  = true
         };
         this.Controls.Add(lblTitle);
 
         var lblSub = new Label
         {
-            Text      = "Suporta PNG, JPG, BMP e GIF Animado nativamente (sem restrição de 16 bits)",
+            Text      = "Módulo de Diagnóstico, Reconexão IAP e Validação com Dry Run Seguro",
             Font      = new Font("Segoe UI", 9F, FontStyle.Regular),
             ForeColor = AorusGray,
-            Location  = new Point(26, 54),
+            Location  = new Point(26, 50),
             AutoSize  = true
         };
         this.Controls.Add(lblSub);
 
-        // ── Preview (left) ───────────────────────────────────────────────────────
+        // ── Preview (left, X=24) ─────────────────────────────────────────────────
         picPreview = new PictureBox
         {
-            Location    = new Point(24, 90),
+            Location    = new Point(24, 82),
             Size        = new Size(340, 340),
             BackColor   = Color.FromArgb(15, 15, 18),
             BorderStyle = BorderStyle.FixedSingle,
@@ -122,39 +140,68 @@ public partial class Form1 : Form
         lblFileInfo = new Label
         {
             Text      = "Arraste uma imagem ou GIF para a área circular acima",
-            Location  = new Point(24, 440),
-            Size      = new Size(340, 45),
+            Location  = new Point(24, 430),
+            Size      = new Size(340, 40),
             ForeColor = Color.FromArgb(212, 212, 216),
             TextAlign = ContentAlignment.TopCenter
         };
         this.Controls.Add(lblFileInfo);
 
-        // ── Right panel ──────────────────────────────────────────────────────────
-        int rightX   = 390;
-        int currentY = 90;
+        // Banner de Proteção contra Formatação do Windows (Tarefa 8)
+        var pnlFormatWarning = new Panel
+        {
+            Location    = new Point(24, 480),
+            Size        = new Size(340, 90),
+            BackColor   = Color.FromArgb(45, 30, 15),
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        var lblFormatWarnTitle = new Label
+        {
+            Text      = "⚠️ AVISO DE SEGURANÇA WINDOWS:",
+            Font      = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(251, 191, 36),
+            Location  = new Point(8, 6),
+            AutoSize  = true
+        };
+        pnlFormatWarning.Controls.Add(lblFormatWarnTitle);
+
+        var lblFormatWarnBody = new Label
+        {
+            Text      = "Se o Windows abrir uma janela com a mensagem 'Você precisa formatar o disco na unidade antes de usá-lo', clique SEMPRE em CANCELAR. O cooler não usa NTFS/FAT.",
+            Font      = new Font("Segoe UI", 8F),
+            ForeColor = Color.FromArgb(254, 243, 199),
+            Location  = new Point(8, 28),
+            Size      = new Size(322, 56)
+        };
+        pnlFormatWarning.Controls.Add(lblFormatWarnBody);
+        this.Controls.Add(pnlFormatWarning);
+
+        // ── Middle Panel (X=390) ─────────────────────────────────────────────────
+        int midX     = 390;
+        int currentY = 82;
 
         // Load button
-        btnLoad = CreateStyledButton("📂 Selecionar Imagem ou GIF", new Point(rightX, currentY), 380, 42, AorusDark2);
+        btnLoad = CreateStyledButton("📂 Selecionar Imagem ou GIF", new Point(midX, currentY), 360, 38, AorusDark2);
         btnLoad.Click += BtnLoad_Click;
         this.Controls.Add(btnLoad);
-        currentY += 46;
+        currentY += 44;
 
-        // 1. Posição Física dos Tubos da Bomba no Gabinete (Fixo)
+        // Tubos da Bomba (Posição física fixa)
         var lblTubes = new Label
         {
             Text     = "Tubos da Bomba:",
-            Location = new Point(rightX, currentY + 6),
+            Location = new Point(midX, currentY + 4),
             AutoSize = true
         };
         this.Controls.Add(lblTubes);
 
         cmbTubes = new ComboBox
         {
-            Location      = new Point(rightX + 130, currentY),
-            Width         = 250,
+            Location      = new Point(midX + 120, currentY),
+            Width         = 240,
             DropDownStyle = ComboBoxStyle.DropDownList,
             DrawMode      = DrawMode.OwnerDrawFixed,
-            ItemHeight    = 24,
+            ItemHeight    = 22,
             BackColor     = AorusDark2,
             ForeColor     = AorusLight,
             FlatStyle     = FlatStyle.Flat
@@ -165,28 +212,28 @@ public partial class Form1 : Form
             "À Esquerda (9h)",
             "Embaixo (6h)"
         });
-        cmbTubes.SelectedIndex = 0; // Padrão: À Direita (3h)
+        cmbTubes.SelectedIndex = 0;
         cmbTubes.DrawItem += CmbRotation_DrawItem;
         cmbTubes.SelectedIndexChanged += (s, e) => picPreview.Invalidate();
         this.Controls.Add(cmbTubes);
-        currentY += 36;
+        currentY += 34;
 
-        // 2. Rotação da Imagem / GIF (Gira apenas a imagem na tela)
+        // Girar Imagem
         var lblRot = new Label
         {
             Text     = "Girar Imagem:",
-            Location = new Point(rightX, currentY + 6),
+            Location = new Point(midX, currentY + 4),
             AutoSize = true
         };
         this.Controls.Add(lblRot);
 
         cmbRotation = new ComboBox
         {
-            Location      = new Point(rightX + 130, currentY),
-            Width         = 250,
+            Location      = new Point(midX + 120, currentY),
+            Width         = 240,
             DropDownStyle = ComboBoxStyle.DropDownList,
             DrawMode      = DrawMode.OwnerDrawFixed,
-            ItemHeight    = 24,
+            ItemHeight    = 22,
             BackColor     = AorusDark2,
             ForeColor     = AorusLight,
             FlatStyle     = FlatStyle.Flat
@@ -201,19 +248,45 @@ public partial class Form1 : Form
         cmbRotation.DrawItem     += CmbRotation_DrawItem;
         cmbRotation.SelectedIndexChanged += (s, e) => picPreview.Invalidate();
         this.Controls.Add(cmbRotation);
-        currentY += 46;
+        currentY += 40;
 
-        // ── Primary Action: Flash directly to Cooler ─────────────────────────────
-        btnFlashCooler = CreateStyledButton("⚡ Gravar no Water Cooler (USB Direto)", new Point(rightX, currentY), 380, 46, Color.FromArgb(234, 88, 12));
-        btnFlashCooler.Font  = new Font("Segoe UI", 11F, FontStyle.Bold);
+        // Caixa Modo Simulação (Dry Run) — Tarefa 7
+        chkDryRun = new CheckBox
+        {
+            Text      = "Modo Simulação (Dry Run) — Sem escrita na Flash",
+            Location  = new Point(midX, currentY),
+            Size      = new Size(360, 24),
+            Checked   = true, // Padrão ATIVO por segurança
+            ForeColor = Color.FromArgb(52, 211, 153),
+            Font      = new Font("Segoe UI", 9F, FontStyle.Bold)
+        };
+        chkDryRun.CheckedChanged += (s, e) =>
+        {
+            if (chkDryRun.Checked)
+            {
+                btnFlashCooler.Text = "⚡ Executar Simulação / Dry Run";
+                btnFlashCooler.BackColor = Color.FromArgb(16, 185, 129); // Verde
+            }
+            else
+            {
+                btnFlashCooler.Text = "⚠️ Gravar no Water Cooler (Flash Real)";
+                btnFlashCooler.BackColor = Color.FromArgb(234, 88, 12); // Laranja
+            }
+        };
+        this.Controls.Add(chkDryRun);
+        currentY += 28;
+
+        // Botão Principal: Dry Run / Flash
+        btnFlashCooler = CreateStyledButton("⚡ Executar Simulação / Dry Run", new Point(midX, currentY), 360, 42, Color.FromArgb(16, 185, 129));
+        btnFlashCooler.Font  = new Font("Segoe UI", 10.5F, FontStyle.Bold);
         btnFlashCooler.Click += BtnFlashCooler_Click;
         this.Controls.Add(btnFlashCooler);
-        currentY += 52;
+        currentY += 48;
 
         prgFlash = new ProgressBar
         {
-            Location = new Point(rightX, currentY),
-            Size     = new Size(380, 14),
+            Location = new Point(midX, currentY),
+            Size     = new Size(360, 12),
             Visible  = false
         };
         this.Controls.Add(prgFlash);
@@ -221,275 +294,250 @@ public partial class Form1 : Form
         lblFlashStatus = new Label
         {
             Text      = "",
-            Location  = new Point(rightX, currentY + 16),
-            Size      = new Size(380, 20),
+            Location  = new Point(midX, currentY + 14),
+            Size      = new Size(360, 18),
             ForeColor = AorusOrange,
-            Font      = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+            Font      = new Font("Segoe UI", 8F, FontStyle.Bold),
             TextAlign = ContentAlignment.MiddleCenter,
             Visible   = false
         };
         this.Controls.Add(lblFlashStatus);
+        currentY += 36;
+
+        // Botão Salvar Dump da Flash (Tarefa 9)
+        btnDumpFlash = CreateStyledButton("📥 Salvar Dump da Flash (Somente Leitura - SHA-256)", new Point(midX, currentY), 360, 34, Color.FromArgb(30, 58, 138));
+        btnDumpFlash.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+        btnDumpFlash.Click += BtnDumpFlash_Click;
+        this.Controls.Add(btnDumpFlash);
         currentY += 40;
 
-        // Save BIN & Export BMP (compact side-by-side)
-        btnSaveBin = CreateStyledButton("💾 Salvar .BIN", new Point(rightX, currentY), 185, 38, AorusDark2);
+        // Save BIN & Export BMP
+        btnSaveBin = CreateStyledButton("💾 Salvar .BIN", new Point(midX, currentY), 175, 32, AorusDark2);
         btnSaveBin.Click += BtnSaveBin_Click;
         this.Controls.Add(btnSaveBin);
 
-        btnSaveBmp = CreateStyledButton("🖼 Exportar .BMP", new Point(rightX + 195, currentY), 185, 38, AorusDark2);
+        btnSaveBmp = CreateStyledButton("🖼 Exportar .BMP", new Point(midX + 185, currentY), 175, 32, AorusDark2);
         btnSaveBmp.Click += BtnSaveBmp_Click;
         this.Controls.Add(btnSaveBmp);
-        currentY += 44;
+        currentY += 38;
 
-        // Restore factory animation
-        btnRestoreDefault = CreateStyledButton("🔄 Restaurar Padrão de Fábrica (0.bin)", new Point(rightX, currentY), 380, 34, Color.FromArgb(45, 45, 50));
-        btnRestoreDefault.Font = new Font("Segoe UI", 9F);
-        btnRestoreDefault.Click += BtnRestoreDefault_Click;
+        // Botão Restaurar Padrão de Fábrica — DESATIVADO (Tarefa 10)
+        btnRestoreDefault = CreateStyledButton("🔒 Restaurar Padrão de Fábrica (0.bin) [Desativado]", new Point(midX, currentY), 360, 32, Color.FromArgb(35, 35, 40));
+        btnRestoreDefault.Font = new Font("Segoe UI", 8.5F);
+        btnRestoreDefault.ForeColor = Color.FromArgb(120, 120, 130);
+        btnRestoreDefault.Enabled = false; // DESATIVADO CONFORME TAREFA 10
+        btnRestoreDefault.Click += (s, e) =>
+        {
+            MessageBox.Show(
+                "O botão de restauração (0.bin) foi temporariamente desativado a seu pedido para revisão e validação do fluxo IAP.\n" +
+                "Ele só será reativado após sua aprovação.",
+                "Funcionalidade Desativada para Testes",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        };
         this.Controls.Add(btnRestoreDefault);
-        currentY += 46;
+        currentY += 40;
 
-        // Separator
-        AddSeparator(rightX, currentY, 380);
-        currentY += 16;
+        AddSeparator(midX, currentY, 360);
+        currentY += 12;
 
-        // Device Detection
-        btnDetectCooler = CreateStyledButton("🔍 Detectar Bomba do Cooler (USB/SCSI)", new Point(rightX, currentY), 380, 38, AorusDark2);
+        // Botão Encerrar Processos Gigabyte (Tarefa 5)
+        btnCloseGigabyte = CreateStyledButton("🛡️ Fechar Processos Gigabyte Concorrentes", new Point(midX, currentY), 360, 32, Color.FromArgb(127, 29, 29));
+        btnCloseGigabyte.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+        btnCloseGigabyte.Click += BtnCloseGigabyte_Click;
+        this.Controls.Add(btnCloseGigabyte);
+        currentY += 38;
+
+        // Botão Detecção / Diagnóstico
+        btnDetectCooler = CreateStyledButton("🔍 Diagnóstico USB / Hardware", new Point(midX, currentY), 360, 32, AorusDark2);
         btnDetectCooler.Click += BtnDetectCooler_Click;
         this.Controls.Add(btnDetectCooler);
-        currentY += 44;
+        currentY += 36;
 
         lblDeviceStatus = new Label
         {
-            Text      = "Status da Bomba: Não verificado",
-            Location  = new Point(rightX, currentY),
-            Size      = new Size(380, 24),
-            ForeColor = AorusGray
+            Text      = "Status: Não verificado",
+            Location  = new Point(midX, currentY),
+            Size      = new Size(360, 36),
+            ForeColor = AorusGray,
+            Font      = new Font("Segoe UI", 8.5F)
         };
         this.Controls.Add(lblDeviceStatus);
-        currentY += 38;
+        currentY += 42;
 
-        // Separator
-        AddSeparator(rightX, currentY, 380);
-        currentY += 16;
+        AddSeparator(midX, currentY, 360);
+        currentY += 10;
 
-        // GitHub Update Checker (repositório bloqueado — somente leitura)
+        // GitHub Repo
         var lblGh = new Label
         {
-            Text     = "Repositório GitHub para Atualizações:",
-            Location = new Point(rightX, currentY),
+            Text     = "Repositório GitHub:",
+            Location = new Point(midX, currentY),
             AutoSize = true,
-            Font     = new Font("Segoe UI", 8.5F)
+            Font     = new Font("Segoe UI", 8F)
         };
         this.Controls.Add(lblGh);
-        currentY += 22;
 
         txtGitHubRepo = new TextBox
         {
             Text      = "naustagic/Aorus_Engine-RGB_Fusion",
-            Location  = new Point(rightX, currentY),
-            Width     = 255,
-            ReadOnly  = true,                              // <── bloqueado
+            Location  = new Point(midX + 115, currentY - 2),
+            Width     = 180,
+            ReadOnly  = true,
             BackColor = Color.FromArgb(30, 30, 33),
             ForeColor = AorusGray,
-            Font      = new Font("Segoe UI", 9F, FontStyle.Italic),
+            Font      = new Font("Segoe UI", 8.5F),
             BorderStyle = BorderStyle.FixedSingle
         };
         this.Controls.Add(txtGitHubRepo);
 
-        // Lock icon label
-        var lblLock = new Label
-        {
-            Text      = "🔒",
-            Location  = new Point(rightX + 260, currentY + 3),
-            AutoSize  = true,
-            ForeColor = AorusGray
-        };
-        this.Controls.Add(lblLock);
-
-        btnCheckUpdate = CreateStyledButton("Verificar", new Point(rightX + 285, currentY - 1), 95, 28, Color.FromArgb(59, 130, 246));
-        btnCheckUpdate.Font  = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+        btnCheckUpdate = CreateStyledButton("Verificar", new Point(midX + 300, currentY - 3), 60, 24, Color.FromArgb(37, 99, 235));
+        btnCheckUpdate.Font = new Font("Segoe UI", 7.5F, FontStyle.Bold);
         btnCheckUpdate.Click += BtnCheckUpdate_Click;
         this.Controls.Add(btnCheckUpdate);
-        currentY += 32;
+        currentY += 24;
 
         lblUpdateStatus = new Label
         {
-            Text      = $"Versão atual: v{AorusImageProcessor.AppVersion} (Pronto)",
-            Location  = new Point(rightX, currentY),
-            Size      = new Size(380, 22),
+            Text      = $"Versão atual: v{AorusImageProcessor.AppVersion}",
+            Location  = new Point(midX, currentY),
+            Size      = new Size(360, 18),
             ForeColor = Color.FromArgb(34, 197, 94),
-            Font      = new Font("Segoe UI", 8.5F)
+            Font      = new Font("Segoe UI", 8F)
         };
         this.Controls.Add(lblUpdateStatus);
 
-        // ── Credits rodapé ───────────────────────────────────────────────────────
-        AddCreditsStrip();
+        // ── Right Panel: Real-Time Debug Console (X=775, W=415) ───────────────────
+        int rightX = 775;
+        int rightW = 415;
 
-        // ── Animation Timer ──────────────────────────────────────────────────────
-        animationTimer = new System.Windows.Forms.Timer { Interval = 60 };
-        animationTimer.Tick += (s, e) =>
+        var lblDebugTitle = new Label
         {
-            if (loadedFrames.Count > 1)
+            Text      = "Console de Diagnóstico & Debug (Tempo Real)",
+            Location  = new Point(rightX, 20),
+            Font      = new Font("Segoe UI", 11F, FontStyle.Bold),
+            ForeColor = AorusOrange,
+            AutoSize  = true
+        };
+        this.Controls.Add(lblDebugTitle);
+
+        // Caixa de Instruções da Ordem de Teste
+        var pnlTestOrder = new Panel
+        {
+            Location    = new Point(rightX, 48),
+            Size        = new Size(rightW, 85),
+            BackColor   = Color.FromArgb(20, 25, 35),
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        var lblOrderTitle = new Label
+        {
+            Text      = "📋 ORDEM DE TESTE RECOMENDADA:",
+            Font      = new Font("Segoe UI", 8F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(96, 165, 250),
+            Location  = new Point(6, 4),
+            AutoSize  = true
+        };
+        pnlTestOrder.Controls.Add(lblOrderTitle);
+
+        var lblOrderBody = new Label
+        {
+            Text      = "1. Clicar em 'Fechar Processos Gigabyte' (ou fechar RGBFusion/Aorus Engine).\n2. No PowerShell: Get-PnpDevice -PresentOnly | Where-Object InstanceId -match 'VID_04D9'\n3. Com 'Modo Simulação (Dry Run)' marcado, clicar em Executar e enviar o log.",
+            Font      = new Font("Segoe UI", 8F),
+            ForeColor = Color.FromArgb(226, 232, 240),
+            Location  = new Point(6, 24),
+            Size      = new Size(rightW - 12, 56)
+        };
+        pnlTestOrder.Controls.Add(lblOrderBody);
+        this.Controls.Add(pnlTestOrder);
+
+        // Text console
+        txtDebugLog = new TextBox
+        {
+            Location    = new Point(rightX, 140),
+            Size        = new Size(rightW, 545),
+            Multiline   = true,
+            ReadOnly    = true,
+            ScrollBars  = ScrollBars.Both,
+            BackColor   = Color.FromArgb(10, 10, 12),
+            ForeColor   = Color.FromArgb(228, 228, 231),
+            Font        = new Font("Consolas", 8.5F, FontStyle.Regular),
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        this.Controls.Add(txtDebugLog);
+
+        btnOpenLogFile = CreateStyledButton("📂 Abrir aorus_flash_debug.log", new Point(rightX, 695), 260, 32, AorusDark2);
+        btnOpenLogFile.Font = new Font("Segoe UI", 8.5F);
+        btnOpenLogFile.Click += (s, e) =>
+        {
+            string path = AorusLogger.GetLogPath();
+            if (File.Exists(path))
             {
-                currentFrameIndex = (currentFrameIndex + 1) % loadedFrames.Count;
-                picPreview.Invalidate();
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+            }
+            else
+            {
+                MessageBox.Show("Arquivo de log ainda não foi criado.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         };
+        this.Controls.Add(btnOpenLogFile);
+
+        btnClearLog = CreateStyledButton("🧹 Limpar Console", new Point(rightX + 270, 695), 145, 32, AorusDark2);
+        btnClearLog.Font = new Font("Segoe UI", 8.5F);
+        btnClearLog.Click += (s, e) => txtDebugLog.Clear();
+        this.Controls.Add(btnClearLog);
+
+        // Timer de animação de preview
+        animationTimer = new System.Windows.Forms.Timer { Interval = 100 };
+        animationTimer.Tick += AnimationTimer_Tick;
     }
 
-    /// <summary>Rodapé com créditos e link para o repositório.</summary>
-    private void AddCreditsStrip()
+    private void AppendDebugLog(string formattedMessage)
     {
-        var pnlCredits = new Panel
+        if (txtDebugLog == null || txtDebugLog.IsDisposed) return;
+
+        if (txtDebugLog.InvokeRequired)
         {
-            Dock      = DockStyle.Bottom,
-            Height    = 30,
-            BackColor = Color.FromArgb(18, 18, 20)
-        };
-
-        var lblCredits = new Label
-        {
-            Text      = "by SaraLapia  •  github.com/naustagic/Aorus_Engine-RGB_Fusion",
-            Font      = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-            ForeColor = AorusGray,
-            Dock      = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Cursor    = Cursors.Hand
-        };
-        lblCredits.Click += (_, _) => OpenUrl("https://github.com/naustagic/Aorus_Engine-RGB_Fusion");
-
-        pnlCredits.Controls.Add(lblCredits);
-        this.Controls.Add(pnlCredits);
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════════
-    // CUSTOM DRAW — ComboBox
-    // ═════════════════════════════════════════════════════════════════════════════
-
-    private void CmbRotation_DrawItem(object? sender, DrawItemEventArgs e)
-    {
-        if (e.Index < 0) return;
-
-        bool selected = (e.State & DrawItemState.Selected) != 0;
-
-        using var bgBrush = new SolidBrush(selected ? Color.FromArgb(60, 30, 0) : AorusDark2);
-        e.Graphics.FillRectangle(bgBrush, e.Bounds);
-
-        // Orange left bar on selected
-        if (selected)
-        {
-            using var barBrush = new SolidBrush(AorusOrange);
-            e.Graphics.FillRectangle(barBrush, e.Bounds.Left, e.Bounds.Top, 3, e.Bounds.Height);
+            txtDebugLog.BeginInvoke(new Action(() => AppendDebugLog(formattedMessage)));
+            return;
         }
 
-        string text = cmbRotation.Items[e.Index]?.ToString() ?? "";
-        using var fgBrush = new SolidBrush(selected ? AorusOrange : AorusLight);
-        var sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
-        var textRect = new RectangleF(e.Bounds.Left + 8, e.Bounds.Top, e.Bounds.Width - 8, e.Bounds.Height);
-        e.Graphics.DrawString(text, e.Font!, fgBrush, textRect, sf);
+        txtDebugLog.AppendText(formattedMessage + Environment.NewLine);
+        txtDebugLog.SelectionStart = txtDebugLog.TextLength;
+        txtDebugLog.ScrollToCaret();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════════
-    // PREVIEW PAINT — with pump port indicators
-    // ═════════════════════════════════════════════════════════════════════════════
-
-    private void PicPreview_Paint(object? sender, PaintEventArgs e)
-    {
-        var g = e.Graphics;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-
-        // Draw image frame or placeholder
-        if (loadedFrames.Count > 0 && currentFrameIndex < loadedFrames.Count)
-        {
-            var frame = loadedFrames[currentFrameIndex];
-            int rot   = cmbRotation.SelectedIndex * 90;
-            var opts  = new AorusBinOptions { RotationAngle = rot, TargetWidth = 320, TargetHeight = 320 };
-            using var prepared = AorusImageProcessor.PrepareFrame(frame, opts);
-            g.DrawImage(prepared, new Rectangle(10, 10, 320, 320));
-        }
-        else
-        {
-            using var brush = new SolidBrush(Color.FromArgb(20, 20, 25));
-            g.FillRectangle(brush, 10, 10, 320, 320);
-
-            var text = "LCD 320x320\nSolte uma imagem ou GIF aqui";
-            using var textBrush = new SolidBrush(Color.FromArgb(113, 113, 122));
-            var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString(text, this.Font, textBrush, new RectangleF(10, 10, 320, 320), sf);
-        }
-
-        // Circular bezel (orange ring)
-        using var bezelPen = new Pen(AorusOrange, 3f);
-        g.DrawEllipse(bezelPen, 10, 10, 320, 320);
-
-        // Pump port indicators (rotate with rotation setting)
-        DrawPumpPorts(g);
-    }
-
-    /// <summary>
-    /// Draws two glowing dots on the circular ring representing the physical IN/OUT pump ports.
-    /// The ports stay fixed according to the physical tube orientation selected by the user.
-    /// </summary>
-    private void DrawPumpPorts(Graphics g)
-    {
-        float cx = 10 + 320 / 2f; // 170
-        float cy = 10 + 320 / 2f; // 170
-        float r  = 160f;          // ring radius
-
-        float tubeAngle = GetSelectedTubeAngle();
-
-        // IN e OUT posicionados de forma fixa em torno dos tubos
-        float a1 = tubeAngle - 25f;
-        float a2 = tubeAngle + 25f;
-
-        DrawPort(g, cx, cy, r, a1, "IN",  Color.FromArgb(255, 80, 180, 255));
-        DrawPort(g, cx, cy, r, a2, "OUT", Color.FromArgb(255, 255, 160, 60));
-    }
-
-    private static void DrawPort(Graphics g, float cx, float cy, float r, float angleDeg, string label, Color portColor)
-    {
-        double rad = angleDeg * Math.PI / 180.0;
-        float px = cx + r * (float)Math.Sin(rad);
-        float py = cy - r * (float)Math.Cos(rad);
-
-        // Outer glow
-        using var glowBrush = new SolidBrush(Color.FromArgb(60, portColor.R, portColor.G, portColor.B));
-        g.FillEllipse(glowBrush, px - 9, py - 9, 18, 18);
-
-        // Inner dot
-        using var dotBrush = new SolidBrush(portColor);
-        g.FillEllipse(dotBrush, px - 5, py - 5, 10, 10);
-
-        // Ring around dot
-        using var dotPen = new Pen(Color.White, 1f);
-        g.DrawEllipse(dotPen, px - 5, py - 5, 10, 10);
-
-        // Label (IN / OUT)
-        float lx = cx + (r + 14) * (float)Math.Sin(rad);
-        float ly = cy - (r + 14) * (float)Math.Cos(rad);
-        using var lblBrush = new SolidBrush(portColor);
-        var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(label, new Font("Segoe UI", 7F, FontStyle.Bold), lblBrush,
-                     new RectangleF(lx - 16, ly - 8, 32, 16), sf);
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════════
-    // HELPERS
-    // ═════════════════════════════════════════════════════════════════════════════
-
-    private Button CreateStyledButton(string text, Point loc, int w, int h, Color bg)
+    private static Button CreateStyledButton(string text, Point loc, int w, int h, Color bg)
     {
         return new Button
         {
-            Text        = text,
-            Location    = loc,
-            Size        = new Size(w, h),
-            BackColor   = bg,
-            ForeColor   = Color.White,
-            FlatStyle   = FlatStyle.Flat,
-            Cursor      = Cursors.Hand,
+            Text      = text,
+            Location  = loc,
+            Size      = new Size(w, h),
+            BackColor = bg,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
             FlatAppearance = { BorderSize = 0 }
         };
+    }
+
+    private static void CmbRotation_DrawItem(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || sender is not ComboBox cb) return;
+        bool sel = (e.State & DrawItemState.Selected) != 0;
+        using var b = new SolidBrush(sel ? AorusOrange : AorusDark2);
+        e.Graphics.FillRectangle(b, e.Bounds);
+        using var tb = new SolidBrush(sel ? Color.Black : AorusLight);
+        e.Graphics.DrawString(cb.Items[e.Index]?.ToString() ?? "", e.Font!, tb, e.Bounds.X + 6, e.Bounds.Y + 3);
+    }
+
+    private void AnimationTimer_Tick(object? sender, EventArgs e)
+    {
+        if (loadedFrames.Count > 1)
+        {
+            currentFrameIndex = (currentFrameIndex + 1) % loadedFrames.Count;
+            picPreview.Invalidate();
+        }
     }
 
     private void AddSeparator(int x, int y, int width)
@@ -547,41 +595,36 @@ public partial class Form1 : Form
     {
         try
         {
-            animationTimer.Stop();
+            currentLoadedPath = path;
             foreach (var f in loadedFrames) f.Dispose();
             loadedFrames.Clear();
             currentFrameIndex = 0;
 
-            using var img = Image.FromFile(path);
-            var frameDim = new FrameDimension(img.FrameDimensionsList[0]);
-            int count    = img.GetFrameCount(frameDim);
-            int maxFrames = 50;
-            int step = 1;
-            if (count > maxFrames)
-            {
-                step = (int)Math.Ceiling((double)count / maxFrames);
-            }
+            using var original = Image.FromFile(path);
+            var frameDim = new FrameDimension(original.FrameDimensionsList[0]);
+            int count    = original.GetFrameCount(frameDim);
 
-            using var canvas = new Bitmap(img.Width, img.Height, PixelFormat.Format32bppArgb);
+            int maxF = Math.Min(count, 50);
+            int step = (count > maxF) ? (int)Math.Ceiling((double)count / maxF) : 1;
+
+            using var canvas = new Bitmap(original.Width, original.Height, PixelFormat.Format32bppArgb);
             using var gCanvas = Graphics.FromImage(canvas);
             gCanvas.Clear(Color.Black);
 
             for (int i = 0; i < count; i += step)
             {
-                if (loadedFrames.Count >= maxFrames) break;
-                img.SelectActiveFrame(frameDim, i);
-                gCanvas.DrawImage(img, 0, 0, img.Width, img.Height);
-                loadedFrames.Add(new Bitmap(canvas));
+                if (loadedFrames.Count >= maxF) break;
+                original.SelectActiveFrame(frameDim, i);
+                gCanvas.DrawImage(original, 0, 0, original.Width, original.Height);
+
+                var bmpClone = new Bitmap(canvas);
+                loadedFrames.Add(bmpClone);
             }
 
-            currentLoadedPath = path;
-            string fname = Path.GetFileName(path);
-            lblFileInfo.Text = $"{fname}\n({img.Width}x{img.Height}) — {count} quadros ({loadedFrames.Count} convertidos para LCD)";
-
-            if (count > 1)
-                animationTimer.Start();
-
+            lblFileInfo.Text = $"{Path.GetFileName(path)}\n({original.Width}x{original.Height}) — {count} quadros ({loadedFrames.Count} convertidos para LCD)";
             picPreview.Invalidate();
+
+            AorusLogger.Log("IMG", $"Imagem/GIF carregado: '{Path.GetFileName(path)}' ({original.Width}x{original.Height}), {loadedFrames.Count} frame(s).");
         }
         catch (Exception ex)
         {
@@ -590,7 +633,78 @@ public partial class Form1 : Form
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // SAVE
+    // PREVIEW PAINT
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    private void PicPreview_Paint(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        if (loadedFrames.Count > 0 && currentFrameIndex < loadedFrames.Count)
+        {
+            var frame = loadedFrames[currentFrameIndex];
+            int imgRot = cmbRotation.SelectedIndex * 90;
+            var opts  = new AorusBinOptions { RotationAngle = imgRot, TargetWidth = 320, TargetHeight = 320 };
+            using var prepared = AorusImageProcessor.PrepareFrame(frame, opts);
+            g.DrawImage(prepared, new Rectangle(10, 10, 320, 320));
+        }
+        else
+        {
+            using var brush = new SolidBrush(Color.FromArgb(20, 20, 25));
+            g.FillRectangle(brush, 10, 10, 320, 320);
+
+            var text = "LCD 320x320\nSolte uma imagem ou GIF aqui";
+            using var textBrush = new SolidBrush(Color.FromArgb(113, 113, 122));
+            var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            g.DrawString(text, this.Font, textBrush, new RectangleF(10, 10, 320, 320), sf);
+        }
+
+        // Circular bezel (orange ring)
+        using var bezelPen = new Pen(AorusOrange, 3f);
+        g.DrawEllipse(bezelPen, 10, 10, 320, 320);
+
+        DrawPumpPorts(g);
+    }
+
+    private void DrawPumpPorts(Graphics g)
+    {
+        float cx = 10 + 320 / 2f;
+        float cy = 10 + 320 / 2f;
+        float r  = 160f;
+
+        float tubeAngle = GetSelectedTubeAngle();
+
+        float a1 = tubeAngle - 25f;
+        float a2 = tubeAngle + 25f;
+
+        DrawPort(g, cx, cy, r, a1, "IN",  Color.FromArgb(255, 80, 180, 255));
+        DrawPort(g, cx, cy, r, a2, "OUT", Color.FromArgb(255, 255, 160, 60));
+    }
+
+    private static void DrawPort(Graphics g, float cx, float cy, float r, float angleDeg, string label, Color portColor)
+    {
+        double rad = angleDeg * Math.PI / 180.0;
+        float px = cx + r * (float)Math.Sin(rad);
+        float py = cy - r * (float)Math.Cos(rad);
+
+        using var glowBrush = new SolidBrush(Color.FromArgb(60, portColor.R, portColor.G, portColor.B));
+        g.FillEllipse(glowBrush, px - 9, py - 9, 18, 18);
+
+        using var dotBrush = new SolidBrush(portColor);
+        g.FillEllipse(dotBrush, px - 4, py - 4, 8, 8);
+
+        float lx = px + 14 * (float)Math.Sin(rad);
+        float ly = py - 14 * (float)Math.Cos(rad);
+
+        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        using var font = new Font("Segoe UI", 7F, FontStyle.Bold);
+        using var textBrush = new SolidBrush(portColor);
+        g.DrawString(label, font, textBrush, lx, ly, sf);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // EXPORT
     // ═════════════════════════════════════════════════════════════════════════════
 
     private void BtnSaveBin_Click(object? sender, EventArgs e)
@@ -665,238 +779,225 @@ public partial class Form1 : Form
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // FLASH DIRECTLY TO COOLER
+    // FLASH DIRECTLY TO COOLER / DRY RUN (Tarefas 1, 4, 7 e 8)
     // ═════════════════════════════════════════════════════════════════════════════
 
     private async void BtnFlashCooler_Click(object? sender, EventArgs e)
     {
-        if (loadedFrames.Count == 0 || string.IsNullOrEmpty(currentLoadedPath))
+        bool isDryRun = chkDryRun.Checked;
+
+        if (isDryRun)
         {
-            MessageBox.Show("Por favor, selecione uma imagem ou GIF animado primeiro.",
-                "Nenhuma Imagem Selecionada", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            BtnLoad_Click(sender, e);
-            if (loadedFrames.Count == 0 || string.IsNullOrEmpty(currentLoadedPath)) return;
+            AorusLogger.Log("USER", "Executando em Modo Simulação (Dry Run). Nenhuma escrita na Flash será feita.");
         }
-
-        var dr = MessageBox.Show(
-            $"Deseja gravar a animação/imagem exibida ({loadedFrames.Count} frame(s)) diretamente no LCD do Water Cooler via USB?\n\n" +
-            "A ferramenta preparará o payload na rotação selecionada e gravará na memória Flash SPI.",
-            "Confirmar Gravação no Water Cooler",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question);
-
-        if (dr != DialogResult.Yes) return;
-
-        btnFlashCooler.Enabled  = false;
-        btnSaveBin.Enabled      = false;
-        btnSaveBmp.Enabled      = false;
-        btnLoad.Enabled         = false;
-        btnDetectCooler.Enabled = false;
-
-        prgFlash.Visible        = true;
-        prgFlash.Value          = 5;
-        lblFlashStatus.Visible  = true;
-        lblFlashStatus.Text     = "Preparando payload da imagem...";
-        lblFlashStatus.ForeColor= AorusOrange;
-
-        try
+        else
         {
-            var opt = new AorusBinOptions
-            {
-                RotationAngle = GetCalculatedBurnAngle()
-            };
+            var dr = MessageBox.Show(
+                "ATENÇÃO: O Modo Simulação (Dry Run) está DESMARCADO.\n\n" +
+                "Você está prestes a autorizar gravação física na memória Flash do Water Cooler.\n\n" +
+                "Recomenda-se realizar o Dry Run primeiro antes de qualquer gravação real.\n\n" +
+                "Deseja prosseguir com a gravação real?",
+                "Confirmar Gravação Real",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
 
-            byte[] binData = await Task.Run(() => AorusImageProcessor.ProcessImageToBin(currentLoadedPath, opt));
-
-            var prog = new Progress<(int Percent, string Status)>(report =>
-            {
-                prgFlash.Value = Math.Clamp(report.Percent, 0, 100);
-                lblFlashStatus.Text = report.Status;
-            });
-
-            var result = await Task.Run(() => AorusScsiTransport.FlashPayloadToCoolerAsync(binData, prog));
-
-            if (result.Success)
-            {
-                lblFlashStatus.ForeColor = Color.FromArgb(34, 197, 94);
-                lblFlashStatus.Text      = "✓ Gravação concluída com sucesso!";
-                MessageBox.Show(
-                    "🎉 Gravação Concluída com Sucesso!\n\n" +
-                    "A nova imagem/animação foi gravada na memória Flash do Water Cooler e já está ativa no LCD.",
-                    "Sucesso!", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            else
-            {
-                lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
-                lblFlashStatus.Text      = "Falha na gravação.";
-                MessageBox.Show(result.Message, "Falha na Gravação", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-        catch (Exception ex)
-        {
-            lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
-            lblFlashStatus.Text      = "Erro inesperado.";
-            MessageBox.Show($"Ocorreu um erro ao processar ou gravar:\n{ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-        finally
-        {
-            btnFlashCooler.Enabled  = true;
-            btnSaveBin.Enabled      = true;
-            btnSaveBmp.Enabled      = true;
-            btnRestoreDefault.Enabled = true;
-            btnLoad.Enabled         = true;
-            btnDetectCooler.Enabled = true;
-        }
-    }
-
-    private async void BtnRestoreDefault_Click(object? sender, EventArgs e)
-    {
-        var dr = MessageBox.Show(
-            "Deseja restaurar o Water Cooler para a animação original de fábrica (0.bin)?\n\n" +
-            "Isso apagará o chuvisco/ruído e reinstalará a animação oficial completa da Gigabyte Aorus.",
-            "Restaurar Padrão de Fábrica",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question);
-
-        if (dr != DialogResult.Yes) return;
-
-        string[] potentialPaths = new[]
-        {
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "0.bin"),
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "aorus_engine", "extracted", "app", "AIO", "images", "0.bin"),
-            @"d:\eng-rev-watercooler\aorus_engine\extracted\app\AIO\images\0.bin"
-        };
-
-        string? binPath = potentialPaths.FirstOrDefault(File.Exists);
-        if (binPath == null)
-        {
-            using var ofd = new OpenFileDialog
-            {
-                Title = "Localize o arquivo 0.bin original da Gigabyte",
-                Filter = "Arquivo BIN (*.bin)|*.bin|Todos os arquivos (*.*)|*.*"
-            };
-            if (ofd.ShowDialog() == DialogResult.OK)
-            {
-                binPath = ofd.FileName;
-            }
-            else return;
+            if (dr != DialogResult.Yes) return;
         }
 
         btnFlashCooler.Enabled    = false;
         btnSaveBin.Enabled        = false;
         btnSaveBmp.Enabled        = false;
-        btnRestoreDefault.Enabled = false;
         btnLoad.Enabled           = false;
+        btnDumpFlash.Enabled      = false;
         btnDetectCooler.Enabled   = false;
+        btnCloseGigabyte.Enabled  = false;
 
         prgFlash.Visible          = true;
         prgFlash.Value            = 5;
         lblFlashStatus.Visible    = true;
-        lblFlashStatus.Text       = "Carregando 0.bin de fábrica...";
+        lblFlashStatus.Text       = isDryRun ? "Executando Simulação (Dry Run)..." : "Preparando payload da imagem...";
         lblFlashStatus.ForeColor  = AorusOrange;
 
         try
         {
-            byte[] binData = await File.ReadAllBytesAsync(binPath);
+            byte[] binData = Array.Empty<byte>();
+            if (loadedFrames.Count > 0 && !string.IsNullOrEmpty(currentLoadedPath))
+            {
+                var opt = new AorusBinOptions { RotationAngle = GetCalculatedBurnAngle() };
+                binData = await Task.Run(() => AorusImageProcessor.ProcessImageToBin(currentLoadedPath, opt));
+            }
+            else if (!isDryRun)
+            {
+                MessageBox.Show("Selecione uma imagem ou GIF antes de realizar a gravação real.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             var prog = new Progress<(int Percent, string Status)>(report =>
             {
                 prgFlash.Value = Math.Clamp(report.Percent, 0, 100);
                 lblFlashStatus.Text = report.Status;
             });
 
-            var result = await Task.Run(() => AorusScsiTransport.FlashPayloadToCoolerAsync(binData, prog));
+            var result = await Task.Run(() => AorusScsiTransport.FlashPayloadToCoolerAsync(binData, isDryRun, 15, prog));
 
             if (result.Success)
             {
                 lblFlashStatus.ForeColor = Color.FromArgb(34, 197, 94);
-                lblFlashStatus.Text      = "✓ Padrão de fábrica restaurado!";
-                MessageBox.Show(
-                    "🎉 Padrão de Fábrica Restaurado com Sucesso!\n\n" +
-                    "A animação oficial Aorus foi regravada na memória Flash e o display voltou ao normal.",
-                    "Sucesso!", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lblFlashStatus.Text      = isDryRun ? "✓ Dry Run concluído com sucesso!" : "✓ Gravação concluída!";
+                MessageBox.Show(result.Message, isDryRun ? "Sucesso no Dry Run" : "Sucesso!", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else
             {
                 lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
-                lblFlashStatus.Text      = "Falha ao restaurar.";
-                MessageBox.Show(result.Message, "Falha na Gravação", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                lblFlashStatus.Text      = "Falha na operação.";
+                MessageBox.Show(result.Message, "Falha na Operação", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
         catch (Exception ex)
         {
             lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
             lblFlashStatus.Text      = "Erro inesperado.";
-            MessageBox.Show($"Erro ao restaurar: {ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Ocorreu um erro:\n{ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
             btnFlashCooler.Enabled    = true;
             btnSaveBin.Enabled        = true;
             btnSaveBmp.Enabled        = true;
-            btnRestoreDefault.Enabled = true;
             btnLoad.Enabled           = true;
+            btnDumpFlash.Enabled      = true;
             btnDetectCooler.Enabled   = true;
+            btnCloseGigabyte.Enabled  = true;
         }
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
-    // DEVICE DETECTION — tenta ler rotação atual do dispositivo
+    // FLASH DUMP (Tarefa 9)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    private async void BtnDumpFlash_Click(object? sender, EventArgs e)
+    {
+        using var sfd = new SaveFileDialog
+        {
+            Filter   = "Arquivo de Imagem da Flash (*.bin)|*.bin",
+            FileName = $"aorus_flash_dump_{DateTime.Now:yyyyMMdd_HHmmss}.bin",
+            Title    = "Salvar Dump Completo da Flash SPI (Somente Leitura)"
+        };
+
+        if (sfd.ShowDialog() != DialogResult.OK) return;
+
+        btnDumpFlash.Enabled   = false;
+        btnFlashCooler.Enabled = false;
+        prgFlash.Visible       = true;
+        prgFlash.Value         = 5;
+        lblFlashStatus.Visible = true;
+        lblFlashStatus.Text    = "Iniciando leitura da memória Flash...";
+        lblFlashStatus.ForeColor = AorusOrange;
+
+        var prog = new Progress<(int Percent, string Status)>(report =>
+        {
+            prgFlash.Value = Math.Clamp(report.Percent, 0, 100);
+            lblFlashStatus.Text = report.Status;
+        });
+
+        try
+        {
+            var result = await Task.Run(() => AorusScsiTransport.DumpFlashToFileAsync(sfd.FileName, prog));
+            if (result.Success)
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(34, 197, 94);
+                lblFlashStatus.Text      = "✓ Dump concluído!";
+                MessageBox.Show(result.Message, "Dump da Flash Concluído", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
+                lblFlashStatus.Text      = "Falha no dump.";
+                MessageBox.Show(result.Message, "Falha no Dump", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Erro durante a leitura da Flash: {ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            btnDumpFlash.Enabled   = true;
+            btnFlashCooler.Enabled = true;
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // PROCESSOS CONCORRENTES (Tarefa 5)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    private void BtnCloseGigabyte_Click(object? sender, EventArgs e)
+    {
+        var running = AorusDiagnostics.GetRunningGigabyteProcesses();
+        if (running.Count == 0)
+        {
+            MessageBox.Show("Nenhum processo Gigabyte conflitante (RGBFusion, AorusEngine, AIO_Service) está em execução no momento.", "Tudo Limpo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        string procs = string.Join("\n", running.ConvertAll(p => $"• {p.Name} (PID: {p.Pid})"));
+        var dr = MessageBox.Show(
+            $"Foram detectados os seguintes processos da Gigabyte em execução:\n\n{procs}\n\n" +
+            "Esses processos podem prender a conexão USB da bomba durante a troca de modo.\n\n" +
+            "Deseja encerrar esses processos agora?",
+            "Confirmar Encerramento de Processos Concorrentes",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (dr == DialogResult.Yes)
+        {
+            var res = AorusDiagnostics.CloseGigabyteProcesses();
+            MessageBox.Show(res.Message, "Processos Encerrados", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            BtnDetectCooler_Click(sender, e);
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // DEVICE DETECTION & DIAGNOSTIC
     // ═════════════════════════════════════════════════════════════════════════════
 
     private void BtnDetectCooler_Click(object? sender, EventArgs e)
     {
-        lblDeviceStatus.Text      = "Detectando...";
+        lblDeviceStatus.Text      = "Analisando hardware USB...";
         lblDeviceStatus.ForeColor = AorusGray;
 
+        AorusLogger.Log("DIAG", "--- Executando Diagnóstico de Hardware e USB ---");
+
+        // 1. Processos concorrentes
+        var procs = AorusDiagnostics.GetRunningGigabyteProcesses();
+        if (procs.Count > 0)
+        {
+            AorusLogger.Log("WARN", $"Processos Gigabyte em execução: {string.Join(", ", procs.ConvertAll(p => $"{p.Name} (PID:{p.Pid})"))}");
+        }
+        else
+        {
+            AorusLogger.Log("DIAG", "Nenhum processo concorrente Gigabyte em execução.");
+        }
+
+        // 2. Estado PnP
+        var pnp = AorusDiagnostics.DetectHoltekUsbState();
+        AorusLogger.Log("DIAG", $"Classificação PnP: {pnp}");
+        AorusLogger.Log("DIAG", $"Driver PnP: {pnp.ErrorDescription}");
+
+        // 3. Disco físico SCSI
         var dev = AorusScsiTransport.DetectDevice();
         if (dev.IsFound)
         {
             lblDeviceStatus.ForeColor = Color.FromArgb(34, 197, 94);
-            lblDeviceStatus.Text      = $"Conectado: {dev.ModelName}";
-
-            // Tentar ler rotação atual do dispositivo
-            int detectedRot = TryReadDeviceRotation(dev.DevicePath);
-            if (detectedRot >= 0)
-            {
-                int idx = detectedRot / 90;
-                if (idx >= 0 && idx < cmbRotation.Items.Count)
-                {
-                    cmbRotation.SelectedIndex = idx;
-                    lblDeviceStatus.Text     += $"  |  Rotação: {detectedRot}°";
-                }
-            }
+            lblDeviceStatus.Text      = $"Conectado: {dev.ModelName}\nModo: {(pnp.Mode == HoltekOperatingMode.JaEmIap_PIDA126 ? "IAP (Bootloader)" : "Normal")}";
+            AorusLogger.Log("DIAG", $"Disco físico encontrado: {dev.ModelName} em {dev.DevicePath}");
         }
         else
         {
             lblDeviceStatus.ForeColor = Color.FromArgb(239, 68, 68);
-            lblDeviceStatus.Text      = "Dispositivo 'LCD_PLATFORM' não encontrado.";
+            lblDeviceStatus.Text      = $"Dispositivo físico não encontrado.\nEstado PnP: {pnp.Mode}";
+            AorusLogger.Log("WARN", "Disco físico 'LCD_PLATFORM' não localizado no Win32_DiskDrive.");
         }
-    }
-
-    /// <summary>
-    /// Tenta consultar a rotação atual armazenada no firmware do dispositivo.
-    /// Retorna 0, 90, 180 ou 270 se bem-sucedido; -1 se não for possível determinar.
-    /// </summary>
-    private static int TryReadDeviceRotation(string devicePath)
-    {
-        try
-        {
-            using var transport = new AorusScsiTransport();
-            if (!transport.OpenDevice(devicePath)) return -1;
-
-            // CMD 0xF9 — leitura de parâmetros de configuração (especulativo)
-            var buf = new byte[64];
-            bool ok = transport.SendScsiCommand(0xF9, 0x80 | 0x40, 0, (uint)buf.Length, buf);
-
-            if (ok && buf.Length >= 2)
-            {
-                int rotByte = buf[1] & 0x03; // bits [1:0] = rotação index
-                return rotByte * 90;
-            }
-        }
-        catch { /* silencioso — dispositivo pode não suportar este comando */ }
-
-        return -1; // não determinado
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
