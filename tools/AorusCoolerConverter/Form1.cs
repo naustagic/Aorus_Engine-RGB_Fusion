@@ -15,6 +15,7 @@ public partial class Form1 : Form
     private PictureBox picPreview = null!;
     private Label lblTitle = null!;
     private Label lblFileInfo = null!;
+    private ComboBox cmbTubes = null!;
     private ComboBox cmbRotation = null!;
     private Button btnLoad = null!;
     private Button btnFlashCooler = null!;
@@ -35,10 +36,23 @@ public partial class Form1 : Form
     private int currentFrameIndex = 0;
     private string? currentLoadedPath;
 
-    // Pump port angles (degrees from top/north, clockwise):
-    // Port IN  ≈ 11 o'clock = −30°  |  Port OUT ≈ 1 o'clock = +30°
-    private const float PumpPortAngle1 = -30f; // IN
-    private const float PumpPortAngle2 = +30f; // OUT
+    private int GetSelectedTubeAngle()
+    {
+        return cmbTubes?.SelectedIndex switch
+        {
+            1 => 0,    // No Topo (12h)
+            2 => 270,  // À Esquerda (9h)
+            3 => 180,  // Embaixo (6h)
+            _ => 90    // À Direita (3h) — padrão do usuário
+        };
+    }
+
+    private int GetCalculatedBurnAngle()
+    {
+        int imgAngle = (cmbRotation?.SelectedIndex ?? 0) * 90;
+        int tubeAngle = GetSelectedTubeAngle();
+        return (imgAngle - tubeAngle + 360) % 360;
+    }
 
     // ── AORUS Orange palette ─────────────────────────────────────────────────────
     private static readonly Color AorusOrange = Color.FromArgb(250, 146, 60);
@@ -123,40 +137,71 @@ public partial class Form1 : Form
         btnLoad = CreateStyledButton("📂 Selecionar Imagem ou GIF", new Point(rightX, currentY), 380, 42, AorusDark2);
         btnLoad.Click += BtnLoad_Click;
         this.Controls.Add(btnLoad);
-        currentY += 52;
+        currentY += 46;
 
-        // Rotation label
+        // 1. Posição Física dos Tubos da Bomba no Gabinete (Fixo)
+        var lblTubes = new Label
+        {
+            Text     = "Tubos da Bomba:",
+            Location = new Point(rightX, currentY + 6),
+            AutoSize = true
+        };
+        this.Controls.Add(lblTubes);
+
+        cmbTubes = new ComboBox
+        {
+            Location      = new Point(rightX + 130, currentY),
+            Width         = 250,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            DrawMode      = DrawMode.OwnerDrawFixed,
+            ItemHeight    = 24,
+            BackColor     = AorusDark2,
+            ForeColor     = AorusLight,
+            FlatStyle     = FlatStyle.Flat
+        };
+        cmbTubes.Items.AddRange(new object[] {
+            "À Direita (3h) — Padrão",
+            "No Topo (12h)",
+            "À Esquerda (9h)",
+            "Embaixo (6h)"
+        });
+        cmbTubes.SelectedIndex = 0; // Padrão: À Direita (3h)
+        cmbTubes.DrawItem += CmbRotation_DrawItem;
+        cmbTubes.SelectedIndexChanged += (s, e) => picPreview.Invalidate();
+        this.Controls.Add(cmbTubes);
+        currentY += 36;
+
+        // 2. Rotação da Imagem / GIF (Gira apenas a imagem na tela)
         var lblRot = new Label
         {
-            Text     = "Rotação da Tela:",
+            Text     = "Girar Imagem:",
             Location = new Point(rightX, currentY + 6),
             AutoSize = true
         };
         this.Controls.Add(lblRot);
 
-        // Custom-drawn rotation ComboBox (orange theme)
         cmbRotation = new ComboBox
         {
-            Location      = new Point(rightX + 110, currentY),
-            Width         = 270,
+            Location      = new Point(rightX + 130, currentY),
+            Width         = 250,
             DropDownStyle = ComboBoxStyle.DropDownList,
             DrawMode      = DrawMode.OwnerDrawFixed,
-            ItemHeight    = 26,
+            ItemHeight    = 24,
             BackColor     = AorusDark2,
             ForeColor     = AorusLight,
             FlatStyle     = FlatStyle.Flat
         };
         cmbRotation.Items.AddRange(new object[] {
-            "0° — Tubos no Topo (12h)",
-            "90° — Tubos à Direita (3h)",
-            "180° — Tubos Embaixo (6h)",
-            "270° — Tubos à Esquerda (9h)"
+            "0° (Normal)",
+            "90° (Girar 90°)",
+            "180° (Invertido)",
+            "270° (Girar 270°)"
         });
         cmbRotation.SelectedIndex = 0;
         cmbRotation.DrawItem     += CmbRotation_DrawItem;
         cmbRotation.SelectedIndexChanged += (s, e) => picPreview.Invalidate();
         this.Controls.Add(cmbRotation);
-        currentY += 52;
+        currentY += 46;
 
         // ── Primary Action: Flash directly to Cooler ─────────────────────────────
         btnFlashCooler = CreateStyledButton("⚡ Gravar no Water Cooler (USB Direto)", new Point(rightX, currentY), 380, 46, Color.FromArgb(234, 88, 12));
@@ -382,9 +427,8 @@ public partial class Form1 : Form
     }
 
     /// <summary>
-    /// Draws two glowing dots on the circular ring representing the IN/OUT pump ports.
-    /// The dots rotate along with the rotation angle so the user can see where the
-    /// physical ports sit relative to the current image orientation.
+    /// Draws two glowing dots on the circular ring representing the physical IN/OUT pump ports.
+    /// The ports stay fixed according to the physical tube orientation selected by the user.
     /// </summary>
     private void DrawPumpPorts(Graphics g)
     {
@@ -392,11 +436,11 @@ public partial class Form1 : Form
         float cy = 10 + 320 / 2f; // 170
         float r  = 160f;          // ring radius
 
-        float rotDeg = cmbRotation.SelectedIndex * 90f;
+        float tubeAngle = GetSelectedTubeAngle();
 
-        // Port angles (clockwise from top/north), offset by rotation
-        float a1 = PumpPortAngle1 + rotDeg;
-        float a2 = PumpPortAngle2 + rotDeg;
+        // IN e OUT posicionados de forma fixa em torno dos tubos
+        float a1 = tubeAngle - 25f;
+        float a2 = tubeAngle + 25f;
 
         DrawPort(g, cx, cy, r, a1, "IN",  Color.FromArgb(255, 80, 180, 255));
         DrawPort(g, cx, cy, r, a2, "OUT", Color.FromArgb(255, 255, 160, 60));
@@ -570,7 +614,7 @@ public partial class Form1 : Form
             {
                 var opts = new AorusBinOptions
                 {
-                    RotationAngle = cmbRotation.SelectedIndex * 90,
+                    RotationAngle = GetCalculatedBurnAngle(),
                     TargetWidth   = 320,
                     TargetHeight  = 320
                 };
@@ -608,7 +652,7 @@ public partial class Form1 : Form
         {
             try
             {
-                var opts = new AorusBinOptions { RotationAngle = cmbRotation.SelectedIndex * 90 };
+                var opts = new AorusBinOptions { RotationAngle = GetCalculatedBurnAngle() };
                 using var prepared = AorusImageProcessor.PrepareFrame(loadedFrames[0], opts);
                 prepared.Save(sfd.FileName, ImageFormat.Bmp);
                 MessageBox.Show("Arquivo BMP 16-bit exportado com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -659,7 +703,7 @@ public partial class Form1 : Form
         {
             var opt = new AorusBinOptions
             {
-                RotationAngle = cmbRotation.SelectedIndex * 90
+                RotationAngle = GetCalculatedBurnAngle()
             };
 
             byte[] binData = await Task.Run(() => AorusImageProcessor.ProcessImageToBin(currentLoadedPath, opt));
