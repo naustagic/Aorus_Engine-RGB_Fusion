@@ -21,3 +21,5 @@ rgb_fusion/extracted/offline_package/raw/
 imagens/*
 fw/*.exe
 fw/read_flash_data.bin
+fw/dist/
+fw/decompiled/

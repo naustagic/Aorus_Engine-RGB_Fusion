@@ -1,0 +1,6 @@
+@echo off
+chcp 65001 > nul
+echo.
+"%~dp0FwDoctor.exe" probe
+echo.
+pause
