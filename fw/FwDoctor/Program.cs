@@ -361,49 +361,50 @@ public class Program
             return 1;
         }
 
-        // Lê 0x3C00 (Version Table)
-        byte[] verData = new byte[32];
-        bool okVer = SendScsi(handle, CMD_READ, 193, 0x3C00, (uint)verData.Length, verData);
-        Console.WriteLine("\n--- Memória Flash em 0x3C00 (Tabela de Boot / Versão) ---");
-        if (okVer)
-        {
-            Console.WriteLine($"Hex: {Convert.ToHexString(verData, 0, 16)}");
-            string ascii = Encoding.ASCII.GetString(verData, 4, 8);
-            Console.WriteLine($"ASCII (bytes 4..11): '{ascii}'");
-            bool isBlank = true;
-            foreach (var b in verData) if (b != 0xFF) isBlank = false;
-            if (isBlank) Console.WriteLine("Status 0x3C00: ⚠️ TOTALMENTE VAZIO (0xFF) -> Explica por que o cooler não inicializa a aplicação!");
-        }
-        else
-        {
-            Console.WriteLine("Falha ao ler 0x3C00.");
-        }
+        Console.WriteLine("\n=== VARREDURA COMPARATIVA DE MEMÓRIA (ROM INTERNA vs FLASH EXTERNA) ===\n");
 
-        // Lê 0x4000 (Application Firmware Start)
-        byte[] appData = new byte[64];
-        bool okApp = SendScsi(handle, CMD_READ, 193, 0x4000, (uint)appData.Length, appData);
-        Console.WriteLine("\n--- Memória Flash em 0x4000 (Início da Aplicação) ---");
-        if (okApp)
-        {
-            Console.WriteLine($"Hex: {Convert.ToHexString(appData, 0, 32)}");
-            uint sp = BitConverter.ToUInt32(appData, 0);
-            uint pc = BitConverter.ToUInt32(appData, 4);
-            Console.WriteLine($"Stack Pointer (MSP): 0x{sp:X8}");
-            Console.WriteLine($"Reset Handler (PC):  0x{pc:X8}");
+        byte[] buf = new byte[32];
 
-            if (appData[0] == 0x01 && appData[1] == 0x00 && appData[2] == 0xC3 && appData[3] == 0xDF)
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("\n⚠️ DIAGNÓSTICO CONFIRMADO:");
-                Console.WriteLine("O endereço 0x4000 contém o cabeçalho de uma IMAGEM (01 00 C3 DF...), e NÃO o código ARM Cortex-M!");
-                Console.WriteLine("Isso comprova que uma imagem GIF/BMP foi gravada erroneamente no lugar do firmware da CPU.");
-                Console.ResetColor();
-            }
-        }
-        else
-        {
-            Console.WriteLine("Falha ao ler 0x4000.");
-        }
+        // 1. Endereço 0x0000
+        Console.WriteLine("--- Endereço 0x00000000 ---");
+        bool okRom0 = SendScsi(handle, CMD_READ, 193, 0x0000, (uint)buf.Length, buf);
+        Console.WriteLine($"  ROM Interna  (type 193): {(okRom0 ? Convert.ToHexString(buf, 0, 16) : "FALHA")}");
+        bool okExt0 = SendScsi(handle, CMD_READ, 192, 0x0000, (uint)buf.Length, buf);
+        Console.WriteLine($"  Flash Externa (type 192): {(okExt0 ? Convert.ToHexString(buf, 0, 16) : "FALHA")}");
+
+        // 2. Endereço 0x3C00 (Version Table)
+        Console.WriteLine("\n--- Endereço 0x00003C00 (Tabela de Boot) ---");
+        bool okRomVer = SendScsi(handle, CMD_READ, 193, 0x3C00, (uint)buf.Length, buf);
+        Console.WriteLine($"  ROM Interna  (type 193): {(okRomVer ? Convert.ToHexString(buf, 0, 16) : "FALHA")}");
+        bool okExtVer = SendScsi(handle, CMD_READ, 192, 0x3C00, (uint)buf.Length, buf);
+        Console.WriteLine($"  Flash Externa (type 192): {(okExtVer ? Convert.ToHexString(buf, 0, 16) : "FALHA")}");
+
+        // 3. Endereço 0x4000 (Application Firmware Start)
+        Console.WriteLine("\n--- Endereço 0x00004000 (Início da Aplicação) ---");
+        bool okRom4k = SendScsi(handle, CMD_READ, 193, 0x4000, (uint)buf.Length, buf);
+        Console.WriteLine($"  ROM Interna  (type 193): {(okRom4k ? Convert.ToHexString(buf, 0, 16) : "FALHA")}");
+        bool okExt4k = SendScsi(handle, CMD_READ, 192, 0x4000, (uint)buf.Length, buf);
+        Console.WriteLine($"  Flash Externa (type 192): {(okExt4k ? Convert.ToHexString(buf, 0, 16) : "FALHA")}");
+
+        // 4. Teste de Apagamento Experimental na página 0x4000
+        Console.WriteLine("\n--- Teste de Apagamento Experimental em 0x4000 ---");
+        Console.WriteLine("Tentando apagar 0x4000 como Flash Externa (type = 0, 1024 bytes)...");
+        bool okEraseExt = SendScsi(handle, CMD_ERASE, 0, 0x4000, 1024, null);
+        Console.WriteLine($"Resultado Erase (type=0): {okEraseExt}");
+
+        SendScsi(handle, CMD_READ, 193, 0x4000, (uint)buf.Length, buf);
+        Console.WriteLine($"Leitura pós-erase type=0 na ROM:   {Convert.ToHexString(buf, 0, 8)}");
+        SendScsi(handle, CMD_READ, 192, 0x4000, (uint)buf.Length, buf);
+        Console.WriteLine($"Leitura pós-erase type=0 na FLASH: {Convert.ToHexString(buf, 0, 8)}");
+
+        Console.WriteLine("\nTentando apagar 0x4000 como ROM Interna (type = 1, 1024 bytes)...");
+        bool okEraseRom = SendScsi(handle, CMD_ERASE, 1, 0x4000, 1024, null);
+        Console.WriteLine($"Resultado Erase (type=1): {okEraseRom}");
+
+        SendScsi(handle, CMD_READ, 193, 0x4000, (uint)buf.Length, buf);
+        Console.WriteLine($"Leitura pós-erase type=1 na ROM:   {Convert.ToHexString(buf, 0, 8)}");
+        SendScsi(handle, CMD_READ, 192, 0x4000, (uint)buf.Length, buf);
+        Console.WriteLine($"Leitura pós-erase type=1 na FLASH: {Convert.ToHexString(buf, 0, 8)}");
 
         return 0;
     }
