@@ -321,7 +321,7 @@ public static class AorusImageProcessor
     }
 
     public const string DefaultGitHubRepo = "naustagic/Aorus_Engine-RGB_Fusion";
-    public const string AppVersion = "2.3.6";
+    public static string AppVersion => typeof(AorusImageProcessor).Assembly.GetName().Version?.ToString(3) ?? "2.4.0";
 
     /// <summary>
     /// Checks GitHub Releases API for new updates.

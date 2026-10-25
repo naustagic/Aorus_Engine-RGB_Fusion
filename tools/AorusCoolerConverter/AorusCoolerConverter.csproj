@@ -8,11 +8,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>2.4.1</Version>
+    <AssemblyVersion>2.4.1.0</AssemblyVersion>
+    <FileVersion>2.4.1.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
     <None Include="..\..\aorus_engine\extracted\app\AIO\images\0.bin" Link="0.bin" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\fw\flash_data.bin" Link="flash_data.bin" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\fw\flash_data.bin" Link="fw\flash_data.bin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

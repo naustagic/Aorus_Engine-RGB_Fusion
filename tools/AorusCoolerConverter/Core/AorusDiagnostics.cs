@@ -163,4 +163,39 @@ public static class AorusDiagnostics
 
         return (true, $"{closed} processo(s) Gigabyte encerrado(s) com sucesso.");
     }
+
+    /// <summary>
+    /// Searches Win32_DiskDrive specifically for the HOLTEK LCD_PLATFORM drive,
+    /// avoiding probing user's local primary drives (NVMe, SSDs, HDDs).
+    /// </summary>
+    public static string? FindLcdPlatformDiskDrive()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT DeviceID, Caption, Model, PNPDeviceID FROM Win32_DiskDrive");
+
+            foreach (ManagementObject drive in searcher.Get())
+            {
+                string caption = drive["Caption"]?.ToString() ?? "";
+                string model = drive["Model"]?.ToString() ?? "";
+                string pnp = drive["PNPDeviceID"]?.ToString() ?? "";
+                string devId = drive["DeviceID"]?.ToString() ?? "";
+
+                if (caption.Contains("LCD_PLATFORM", StringComparison.OrdinalIgnoreCase) ||
+                    model.Contains("LCD_PLATFORM", StringComparison.OrdinalIgnoreCase) ||
+                    (pnp.Contains("VID_04D9", StringComparison.OrdinalIgnoreCase) && pnp.Contains("PID_A126", StringComparison.OrdinalIgnoreCase)))
+                {
+                    AorusLogger.Log("PNP", $"Dispositivo LCD_PLATFORM localizado em '{devId}' ({caption}).");
+                    return devId;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AorusLogger.Log("WARN", $"Exceção ao consultar Win32_DiskDrive: {ex.Message}");
+        }
+
+        return null;
+    }
 }

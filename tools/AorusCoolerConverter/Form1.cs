@@ -25,6 +25,7 @@ public partial class Form1 : Form
     private Button btnDumpFlash = null!;
     private Button btnSaveBin = null!;
     private Button btnSaveBmp = null!;
+    private Button btnRestoreFirmware = null!;
     private Button btnRestoreDefault = null!;
     private Button btnCloseGigabyte = null!;
     private Button btnDetectCooler = null!;
@@ -310,6 +311,13 @@ public partial class Form1 : Form
         btnDumpFlash.Click += BtnDumpFlash_Click;
         this.Controls.Add(btnDumpFlash);
         currentY += 40;
+
+        // Botão Recuperação Segura do Firmware de Fábrica (F1.4)
+        btnRestoreFirmware = CreateStyledButton("🚑 Recuperar Firmware Oficial de Fábrica (F1.4)", new Point(midX, currentY), 360, 36, Color.FromArgb(185, 28, 28));
+        btnRestoreFirmware.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        btnRestoreFirmware.Click += BtnRestoreFirmware_Click;
+        this.Controls.Add(btnRestoreFirmware);
+        currentY += 42;
 
         // Save BIN & Export BMP
         btnSaveBin = CreateStyledButton("💾 Salvar .BIN", new Point(midX, currentY), 175, 32, AorusDark2);
@@ -924,6 +932,78 @@ public partial class Form1 : Form
         {
             btnDumpFlash.Enabled   = true;
             btnFlashCooler.Enabled = true;
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // RECUPERAÇÃO DO FIRMWARE OFICIAL (F1.4)
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    private async void BtnRestoreFirmware_Click(object? sender, EventArgs e)
+    {
+        var dr = MessageBox.Show(
+            "Deseja iniciar o Procedimento de Recuperação Segura do Firmware Oficial (F1.4)?\n\n" +
+            "Este procedimento irá:\n" +
+            "1. Encerrar processos conflitantes da Gigabyte para evitar interferência USB.\n" +
+            "2. Apagar a área de firmware corrompida (0x4000).\n" +
+            "3. Gravar o firmware original oficial da Gigabyte F1.4 (46.852 bytes).\n" +
+            "4. Fazer a verificação (Verify) de 100% dos bytes gravados.\n" +
+            "5. Somente com verify aprovado, restaurar a tabela de boot em 0x3C00 (V1.4.0).\n" +
+            "6. Comandar a reinicialização para modo normal (PID_3020).\n\n" +
+            "O LCD deve acender e o cooler voltará ao estado de fábrica.\n\nDeseja prosseguir?",
+            "Confirmar Recuperação do Firmware de Fábrica",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+
+        if (dr != DialogResult.Yes) return;
+
+        btnRestoreFirmware.Enabled = false;
+        btnFlashCooler.Enabled     = false;
+        btnDumpFlash.Enabled       = false;
+        btnDetectCooler.Enabled    = false;
+        btnCloseGigabyte.Enabled   = false;
+
+        prgFlash.Visible           = true;
+        prgFlash.Value             = 5;
+        lblFlashStatus.Visible     = true;
+        lblFlashStatus.Text        = "Iniciando recuperação do firmware...";
+        lblFlashStatus.ForeColor   = AorusOrange;
+
+        var prog = new Progress<(int Percent, string Status)>(report =>
+        {
+            prgFlash.Value = Math.Clamp(report.Percent, 0, 100);
+            lblFlashStatus.Text = report.Status;
+        });
+
+        try
+        {
+            var result = await Task.Run(() => AorusScsiTransport.RestoreOfficialFirmwareAsync(null, prog));
+            if (result.Success)
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(34, 197, 94);
+                lblFlashStatus.Text      = "✓ Recuperação concluída!";
+                MessageBox.Show(result.Message, "Sucesso na Recuperação", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
+                lblFlashStatus.Text      = "Falha na recuperação.";
+                MessageBox.Show(result.Message, "Falha na Recuperação", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            lblFlashStatus.ForeColor = Color.FromArgb(239, 68, 68);
+            lblFlashStatus.Text      = "Erro inesperado.";
+            MessageBox.Show($"Ocorreu um erro durante a recuperação:\n{ex.Message}", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            btnRestoreFirmware.Enabled = true;
+            btnFlashCooler.Enabled     = true;
+            btnDumpFlash.Enabled       = true;
+            btnDetectCooler.Enabled    = true;
+            btnCloseGigabyte.Enabled   = true;
         }
     }
 
