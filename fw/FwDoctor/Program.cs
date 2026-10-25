@@ -542,16 +542,42 @@ public class Program
         uint apAddr = verAddr != 0 ? (verAddr + 1024u) : 0x4000u;
         uint apLen = (uint)fwData.Length;
 
-        // Erase 0x4000
-        Console.WriteLine($"[4/7] Apagando Flash interna da aplicação (0x{apAddr:X8}, {apLen} bytes)...");
-        if (!SendScsi(handle, CMD_ERASE, 1, apAddr, apLen, null))
+        // 4. Apagar Flash interna da aplicação página a página (1024 bytes por página)
+        uint pageSize = 1024u;
+        uint eraseEnd = ((apLen + pageSize - 1) / pageSize) * pageSize; // 47.104 bytes (46 páginas)
+        Console.WriteLine($"[4/7] Apagando Flash interna da aplicação (0x{apAddr:X8} a 0x{(apAddr + eraseEnd):X8}, {eraseEnd / pageSize} páginas de 1KB)...");
+
+        for (uint pageOff = 0; pageOff < eraseEnd; pageOff += pageSize)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("[ERRO] Falha ao apagar área de aplicação.");
-            Console.ResetColor();
-            return 1;
+            uint curPageAddr = apAddr + pageOff;
+            if (!SendScsi(handle, CMD_ERASE, 1, curPageAddr, pageSize, null))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n[ERRO] Falha ao apagar página em 0x{curPageAddr:X8}.");
+                Console.ResetColor();
+                return 1;
+            }
+            Console.Write($"\r      Apagando página: {pageOff / pageSize + 1}/{eraseEnd / pageSize} (0x{curPageAddr:X8})");
         }
-        Console.WriteLine("      ✓ Flash interna apagada.");
+        Console.WriteLine($"\r      Apagando página: {eraseEnd / pageSize}/{eraseEnd / pageSize}. ✓ Todas as {eraseEnd / pageSize} páginas apagadas com sucesso!");
+
+        // Conferir se 0x4000 foi realmente apagado para 0xFF
+        byte[] checkErase = new byte[64];
+        if (SendScsi(handle, CMD_READ, 193, apAddr, (uint)checkErase.Length, checkErase))
+        {
+            bool isAllFf = true;
+            foreach (var b in checkErase) if (b != 0xFF) isAllFf = false;
+            if (isAllFf)
+            {
+                Console.WriteLine("      ✓ Confirmação: Endereço 0x4000 está limpo (0xFF) e pronto para gravação!");
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"      ⚠️ Atenção: Endereço 0x4000 ainda contém: {Convert.ToHexString(checkErase, 0, 8)}");
+                Console.ResetColor();
+            }
+        }
 
         // Write firmware in 64-byte chunks
         Console.WriteLine($"[5/7] Gravando {apLen} bytes em blocos de 64 bytes (alimentando Watchdog)...");
