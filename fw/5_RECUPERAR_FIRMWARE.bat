@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 > nul
+cd /d "%~dp0"
 echo.
 echo ====================================================================
 echo  ATENCAO: Este procedimento ira gravar o firmware original F1.4

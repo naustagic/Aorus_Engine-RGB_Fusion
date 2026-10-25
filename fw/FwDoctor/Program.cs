@@ -90,6 +90,7 @@ public class Program
         Console.WriteLine("  AORUS Water Cooler - FW Diagnostic & Recovery Console (FwDoctor)");
         Console.WriteLine("=================================================================\n");
 
+        int ret = 0;
         try
         {
             string cmd = args.Length > 0 ? args[0].ToLowerInvariant() : "help";
@@ -97,19 +98,24 @@ public class Program
             switch (cmd)
             {
                 case "monitor":
-                    return RunMonitor();
+                    ret = RunMonitor();
+                    break;
 
                 case "probe":
-                    return RunProbe();
+                    ret = RunProbe();
+                    break;
 
                 case "read-header":
-                    return RunReadHeader();
+                    ret = RunReadHeader();
+                    break;
 
                 case "diagnose":
-                    return RunDiagnose();
+                    ret = RunDiagnose();
+                    break;
 
                 case "recover":
-                    return RunRecover();
+                    ret = RunRecover();
+                    break;
 
                 default:
                     Console.WriteLine("Uso: FwDoctor <comando>\n");
@@ -119,7 +125,8 @@ public class Program
                     Console.WriteLine("  read-header  - Lê e exibe o que está gravado em 0x3C00 (versão) e 0x4000 (firmware/imagem)");
                     Console.WriteLine("  diagnose     - Analisa exatamente por que o FWUpgrade.exe original falha");
                     Console.WriteLine("  recover      - Executa a restauração segura do firmware F1.4 via linha de comando");
-                    return 0;
+                    ret = 0;
+                    break;
             }
         }
         catch (Exception ex)
@@ -128,10 +135,14 @@ public class Program
             Console.WriteLine($"\n[EXCEÇÃO NÃO TRATADA]: {ex.Message}");
             Console.WriteLine(ex.ToString());
             Console.ResetColor();
-            Console.WriteLine("\nPressione qualquer tecla para fechar...");
-            Console.ReadKey();
-            return 99;
+            ret = 99;
         }
+
+        Console.WriteLine("\n=================================================================");
+        Console.WriteLine("  Pressione qualquer tecla para fechar esta janela...");
+        Console.WriteLine("=================================================================");
+        try { Console.ReadKey(); } catch { }
+        return ret;
     }
 
     private static string? FindLcdDrive()
@@ -455,15 +466,22 @@ public class Program
     {
         Console.WriteLine("=== INICIANDO RECUPERAÇÃO SEGURA DO WATER COOLER VIA COMANDO ===\n");
 
-        string fwFile = "flash_data.bin";
-        if (!File.Exists(fwFile))
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string[] candidates = new[]
         {
-            fwFile = @"..\fw\flash_data.bin";
-        }
-        if (!File.Exists(fwFile))
+            Path.Combine(baseDir, "flash_data.bin"),
+            Path.Combine(baseDir, "..", "flash_data.bin"),
+            Path.Combine(baseDir, "fw", "flash_data.bin"),
+            @"D:\eng-rev-watercooler\fw\flash_data.bin",
+            "flash_data.bin"
+        };
+
+        string? fwFile = candidates.FirstOrDefault(File.Exists);
+        if (fwFile == null)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("[ERRO] flash_data.bin não encontrado!");
+            Console.WriteLine("[ERRO] flash_data.bin não encontrado em nenhum dos locais esperados:");
+            foreach (var c in candidates) Console.WriteLine($"       - {c}");
             Console.ResetColor();
             return 1;
         }
